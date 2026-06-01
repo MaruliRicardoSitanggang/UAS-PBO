@@ -1,0 +1,6 @@
+{
+  "name": "PapiKost",
+  "description": "Sistem Informasi Pemesanan Kost Medan berbasis React Frontend dan Java Spring Boot Rest API (OOP)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

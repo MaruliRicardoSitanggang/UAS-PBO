@@ -16,9 +16,12 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
         '/api': {
-          target: 'http://localhost:3000', // Ini port server bohongan (Node.js) Anda
+          target: 'http://localhost:8080',  // Spring Boot backend
           changeOrigin: true,
           secure: false,
+          configure: (proxy) => {
+            proxy.on('error', () => {}); // Suppress ECONNREFUSED saat backend offline
+          },
         }
       }
     },

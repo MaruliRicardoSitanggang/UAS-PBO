@@ -1,3 +1,5 @@
+import AdminDashboard from './AdminDashboard';
+import OwnerDashboard from './OwnerDashboard';
 import React, { useState, useEffect } from "react";
 import {
   Search, Bell, LayoutDashboard, Bed, ClipboardCheck, ClipboardList,
@@ -50,6 +52,9 @@ const INITIAL_KAMAR_KOST = [
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) => n?.toLocaleString("id-ID");
 
+// ✨ TAMBAHAN UTAMA: SETTING API URL VERCEL ✨
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
 // ─── Main App ────────────────────────────────────────────────────────────────
 export default function App() {
   // Auth
@@ -72,7 +77,7 @@ export default function App() {
   const [kamarSayaTab, setKamarSayaTab] = useState("laporan");
 
   // admin: "verifikasi-pemilik" | "verifikasi-berkas" | "pengajuan-owner" | "tiket-perbaikan"
-  const [adminPage, setAdminPage] = useState("verifikasi-pemilik");
+  const [adminPage, setAdminPage] = useState("verifikasi-data-diri");
 
   // owner: "dashboard" | "manajemen-kamar" | "pengajuan-sewa" | "tiket-perbaikan" | "keuangan"
   const [ownerPage, setOwnerPage] = useState("dashboard");
@@ -158,9 +163,16 @@ export default function App() {
   const [showSewaForm, setShowSewaForm] = useState(false);
   const [sewaMsg, setSewaMsg] = useState(null);
 
-  // Owner: add kamar form
+  // Owner: add/edit kamar form
   const [showAddKamar, setShowAddKamar] = useState(false);
   const [addKamarForm, setAddKamarForm] = useState({ nomor: "", lantai: 1, harga: 1500000 });
+  const [editKamarId, setEditKamarId] = useState(null);
+  const [editKamarForm, setEditKamarForm] = useState({ nomor: "", lantai: 1, harga: 1500000 });
+  const [showEditKamar, setShowEditKamar] = useState(false);
+  const [showDeleteKamarId, setShowDeleteKamarId] = useState(null);
+
+  // Image preview modal
+  const [previewImageUrl, setPreviewImageUrl] = useState(null);
 
   // Owner: info kost form
   const [ownerKostInfo, setOwnerKostInfo] = useState({
@@ -176,7 +188,7 @@ export default function App() {
   // ─── Fetch helpers ──────────────────────────────────────────────────────────
   const fetchKamarList = async () => {
     try {
-      const r = await fetch("/api/kost/medan");
+      const r = await fetch(`${API_URL}/api/kost/medan`);
       if (r.ok) setActiveKamarList(await r.json());
     } catch { /* offline */ }
   };
@@ -184,21 +196,21 @@ export default function App() {
   const fetchLaporanList = async () => {
     if (!currentUser) return;
     try {
-      const r = await fetch(`/api/laporan?userId=${currentUser.id}`);
+      const r = await fetch(`${API_URL}/api/laporan?userId=${currentUser.id}`);
       if (r.ok) setLaporanList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchVerifikasiList = async () => {
     try {
-      const r = await fetch("/api/verifikasi");
+      const r = await fetch(`${API_URL}/api/verifikasi-data-diri`);
       if (r.ok) setVerifikasiList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchPengajuanSewa = async () => {
     try {
-      const r = await fetch("/api/pengajuan");
+      const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk`);
       if (r.ok) setPengajuanSewa(await r.json());
     } catch { /* offline */ }
   };
@@ -206,7 +218,7 @@ export default function App() {
   const fetchBiodata = async () => {
     if (!currentUser) return;
     try {
-      const r = await fetch(`/api/biodata/${currentUser.id}`);
+      const r = await fetch(`${API_URL}/api/biodata/${currentUser.id}`);
       if (r.ok) {
         const data = await r.json();
         setBiodata(data);
@@ -231,59 +243,61 @@ export default function App() {
   const fetchInvites = async () => {
     if (!currentUser) return;
     try {
-      const r = await fetch(`/api/invite/${currentUser.id}`);
+      const r = await fetch(`${API_URL}/api/invite/${currentUser.id}`);
       if (r.ok) setInviteList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchPengajuanOwner = async () => {
     try {
-      const r = await fetch("/api/pengajuan-owner");
+      const r = await fetch(`${API_URL}/api/pengajuan-owner`);
       if (r.ok) setPengajuanOwnerList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchVerifikasiBerkas = async () => {
     try {
-      const r = await fetch("/api/verifikasi-berkas");
+      const r = await fetch(`${API_URL}/api/verifikasi-berkas`);
       if (r.ok) setVerifikasiBerkasList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchVerifikasiDataDiri = async () => {
     try {
-      const r = await fetch("/api/verifikasi-data-diri");
+      const r = await fetch(`${API_URL}/api/verifikasi-data-diri`);
       if (r.ok) setVerifikasiDataDiriList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchPengajuanSewaKos = async () => {
     try {
-      const r = await fetch("/api/pengajuan-sewa-kos");
-      if (r.ok) setPengajuanSewaKosList(await r.json());
+      if (currentUser?.role === "pemilik") {
+        const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk`);
+        if (r.ok) setPengajuanSewaKosList(await r.json());
+      } else if (currentUser?.id) {
+        const r = await fetch(`${API_URL}/api/pengajuan/${currentUser.id}`);
+        if (r.ok) setPengajuanSewaKosList(await r.json());
+      }
     } catch { /* offline */ }
   };
 
-  const fetchReservationBill = async () => {
-    setLoadingApi(true);
-    try {
-      const r = await fetch(
-        `/api/reservasi/hitung?tipe=${calcTipe}&hargaDasar=${calcHargaDasar}&durasi=${calcDurasi}&jumlahOrang=${calcJumlahOrang}`
-      );
-      setApiResult(await r.json());
-    } catch {
-      const total = calcTipe === "solo"
-        ? calcHargaDasar * calcDurasi
-        : (calcHargaDasar / calcJumlahOrang) * calcDurasi;
-      setApiResult({
-        idReservasi: calcTipe === "solo" ? "RES-SLO-200" : "RES-PTG-100",
-        tipe: calcTipe, hargaDasarSewa: calcHargaDasar, durasiBulan: calcDurasi,
-        totalTagihanHasil: total,
-        deskripsiKonsep: `Reservasi${calcTipe === "solo" ? "Solo" : "Patungan"}.hitungTotalTagihan()`,
-        formulaPBO: calcTipe === "solo" ? `Total = hargaDasar * ${calcDurasi}` : `Total = (hargaDasar / ${calcJumlahOrang}) * ${calcDurasi}`,
-        jumlahOrang: calcTipe === "solo" ? 1 : calcJumlahOrang,
-      });
-    } finally { setLoadingApi(false); }
+  const fetchReservationBill = () => {
+    // Kalkulasi lokal — tidak perlu network request ke backend
+    const total = calcTipe === "solo"
+      ? calcHargaDasar * calcDurasi
+      : (calcHargaDasar / calcJumlahOrang) * calcDurasi;
+    setApiResult({
+      idReservasi: calcTipe === "solo" ? "RES-SLO-200" : "RES-PTG-100",
+      tipe: calcTipe,
+      hargaDasarSewa: calcHargaDasar,
+      durasiBulan: calcDurasi,
+      totalTagihanHasil: total,
+      deskripsiKonsep: `Reservasi${calcTipe === "solo" ? "Solo" : "Patungan"}.hitungTotalTagihan()`,
+      formulaPBO: calcTipe === "solo"
+        ? `Total = hargaDasar * ${calcDurasi}`
+        : `Total = (hargaDasar / ${calcJumlahOrang}) * ${calcDurasi}`,
+      jumlahOrang: calcTipe === "solo" ? 1 : calcJumlahOrang,
+    });
   };
 
   useEffect(() => {
@@ -308,8 +322,9 @@ export default function App() {
     const file = e.target.files[0];
     if (!file) return;
     const fileName = file.name;
+    const objectUrl = URL.createObjectURL(file);
     if (formType === "biodata") {
-      setBiodataFiles(prev => ({ ...prev, [key]: fileName }));
+      setBiodataFiles(prev => ({ ...prev, [key]: { name: fileName, url: objectUrl } }));
       setBiodataForm(prev => ({ ...prev, [key]: fileName }));
     }
   };
@@ -324,7 +339,7 @@ export default function App() {
     e.preventDefault();
     if (!newKategori || !newKendala) return;
     try {
-      const r = await fetch("/api/laporan", {
+      const r = await fetch(`${API_URL}/api/laporan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kategori: newKategori, kendala: newKendala, detail: newDetail, userId: currentUser.id }),
@@ -351,7 +366,7 @@ export default function App() {
 
   const handleDecisionPengajuan = async (id, decision) => {
     try {
-      const r = await fetch(`/api/pengajuan/${id}`, {
+      const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -363,7 +378,7 @@ export default function App() {
 
   const handleDecisionVerifikasi = async (id, decision) => {
     try {
-      const r = await fetch(`/api/verifikasi/${id}`, {
+      const r = await fetch(`${API_URL}/api/verifikasi-data-diri/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -377,7 +392,7 @@ export default function App() {
     e.preventDefault();
     setBiodataSaving(true);
     try {
-      const r = await fetch(`/api/biodata/${currentUser.id}`, {
+      const r = await fetch(`${API_URL}/api/biodata/${currentUser.id}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(biodataForm)
       });
@@ -398,7 +413,7 @@ export default function App() {
     e.preventDefault();
     if (!inviteTargetId || !selectedKamar) return;
     try {
-      const r = await fetch("/api/invite", {
+      const r = await fetch(`${API_URL}/api/invite`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fromUserId: currentUser.id, fromUserName: currentUser.name,
@@ -423,7 +438,7 @@ export default function App() {
 
   const handleRespondInvite = async (id, status) => {
     try {
-      const r = await fetch(`/api/invite/${id}`, {
+      const r = await fetch(`${API_URL}/api/invite/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status })
       });
@@ -433,7 +448,7 @@ export default function App() {
 
   const handleDecisionVerifikasiBerkas = async (id, decision) => {
     try {
-      const r = await fetch(`/api/verifikasi-berkas/${id}`, {
+      const r = await fetch(`${API_URL}/api/verifikasi-berkas/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -443,24 +458,25 @@ export default function App() {
     }
   };
 
-  const handleDecisionVerifikasiDataDiri = async (id, decision) => {
+  const handleDecisionVerifikasiDataDiri = async (id, decision, comment = "") => {
     try {
-      const r = await fetch(`/api/verifikasi-data-diri/${id}`, {
+      const r = await fetch(`${API_URL}/api/verifikasi-data-diri/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: decision })
+        body: JSON.stringify({ status: decision, komentarAdmin: comment })
       });
       if (r.ok) {
         await fetchVerifikasiDataDiri();
-        await fetchBiodata(); // refresh biodata agar isVerified terupdate
+        await fetchBiodata();
       }
     } catch {
-      setVerifikasiDataDiriList(verifikasiDataDiriList.map(v => v.id === id ? { ...v, status: decision } : v));
+      setVerifikasiDataDiriList(verifikasiDataDiriList.map(v =>
+        v.id === id ? { ...v, status: decision, komentarAdmin: comment } : v));
     }
   };
 
   const handleDecisionPengajuanSewaKos = async (id, decision) => {
     try {
-      const r = await fetch(`/api/pengajuan-sewa-kos/${id}`, {
+      const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -470,15 +486,16 @@ export default function App() {
     }
   };
 
-  const handleDecisionPengajuanOwner = async (id, decision) => {
+  const handleDecisionPengajuanOwner = async (id, decision, comment = "") => {
     try {
-      const r = await fetch(`/api/pengajuan-owner/${id}`, {
+      const r = await fetch(`${API_URL}/api/pengajuan-owner/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: decision })
+        body: JSON.stringify({ status: decision, komentarAdmin: comment })
       });
       if (r.ok) await fetchPengajuanOwner();
     } catch {
-      setPengajuanOwnerList(pengajuanOwnerList.map(p => p.id === id ? { ...p, status: decision } : p));
+      setPengajuanOwnerList(pengajuanOwnerList.map(p =>
+        p.id === id ? { ...p, status: decision, komentarAdmin: comment } : p));
     }
   };
 
@@ -488,20 +505,14 @@ export default function App() {
       return;
     }
     try {
-      const r = await fetch("/api/pengajuan-sewa-kos", {
+      const r = await fetch(`${API_URL}/api/pengajuan`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: currentUser.id,
-          namaLengkap: currentUser.name,
-          email: currentUser.email,
+          userId: Number(currentUser.id),
           kamarId: selectedKamar.id,
-          namaKost: selectedKamar.namaKost,
-          ownerId: "owner001", // dalam sistem nyata ini dari data kost
-          tipe: calcTipe,
-          durasi: calcDurasi,
-          jumlahOrang: calcJumlahOrang,
+          tipeSewa: calcTipe,
+          durasiBulan: calcDurasi,
           totalTagihan: apiResult?.totalTagihanHasil,
-          isPatungan: calcTipe === "patungan",
         })
       });
       if (r.ok) {
@@ -532,6 +543,22 @@ export default function App() {
     setShowAddKamar(false);
   };
 
+  const handleEditKamar = (e) => {
+    e.preventDefault();
+    setKamarOwnerList(kamarOwnerList.map(k =>
+      k.id === editKamarId
+        ? { ...k, nomor: editKamarForm.nomor, lantai: Number(editKamarForm.lantai), harga: Number(editKamarForm.harga) }
+        : k
+    ));
+    setShowEditKamar(false);
+    setEditKamarId(null);
+  };
+
+  const handleDeleteKamar = (id) => {
+    setKamarOwnerList(kamarOwnerList.filter(k => k.id !== id));
+    setShowDeleteKamarId(null);
+  };
+
   const handleUpdateKamarStatus = (id, newStatus) => {
     setKamarOwnerList(kamarOwnerList.map(k => k.id === id ? { ...k, status: newStatus } : k));
   };
@@ -549,6 +576,7 @@ export default function App() {
     return (
       <LoginPage
         onLoginSuccess={(userData) => {
+          // userData sudah dinormalisasi di LoginPage (field langsung di root)
           setCurrentUser(userData);
           localStorage.setItem("papikost_user", JSON.stringify(userData));
           setCurrentRole(userData.role);
@@ -622,7 +650,7 @@ export default function App() {
 
               {/* Sidebar */}
               <aside className="w-full lg:w-64 bg-white border-r border-neutral-200 p-5 flex flex-col gap-4 shrink-0 lg:sticky lg:top-0 h-auto lg:h-[calc(100vh-68px)]">
-                    {/* Status verifikasi di sidebar */}
+                  {/* Status verifikasi di sidebar */}
                   <div className="hidden lg:flex items-center gap-3 px-1 pb-2 border-b border-neutral-100">
                     <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
                       {currentUser.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
@@ -777,15 +805,42 @@ export default function App() {
                             <Upload className={`h-6 w-6 ${biodataFiles[field.key] ? "text-emerald-600" : "text-neutral-400"}`} />
                             <label className="text-xs font-bold text-neutral-600 text-center">{field.label}</label>
                             {biodataFiles[field.key] ? (
-                              <div className="flex flex-col items-center gap-1">
+                              <div className="flex flex-col items-center gap-1 w-full">
+                                {/* Preview gambar jika ada */}
+                                {biodataFiles[field.key].url && (
+                                  <div
+                                    className="w-full h-24 rounded-lg overflow-hidden border border-emerald-200 cursor-pointer relative group"
+                                    onClick={() => setPreviewImageUrl(biodataFiles[field.key].url)}
+                                  >
+                                    <img
+                                      src={biodataFiles[field.key].url}
+                                      alt={field.label}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition"
+                                    />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                      <Eye className="h-5 w-5 text-white" />
+                                    </div>
+                                  </div>
+                                )}
                                 <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
-                                  <CheckCircle className="h-3 w-3" /> {biodataFiles[field.key]}
+                                  <CheckCircle className="h-3 w-3" /> {biodataFiles[field.key].name}
                                 </span>
-                                <label className="text-[10px] text-emerald-600 underline cursor-pointer">
-                                  Ganti file
-                                  <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden"
-                                    onChange={e => handleFileChange(e, "biodata", field.key)} />
-                                </label>
+                                <div className="flex gap-2 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewImageUrl(biodataFiles[field.key].url)}
+                                    className="flex-1 text-[10px] text-emerald-700 font-bold border border-emerald-300 rounded-lg py-1 hover:bg-emerald-50 transition flex items-center justify-center gap-1"
+                                  >
+                                    <Eye className="h-3 w-3" /> Lihat
+                                  </button>
+                                  <label className="flex-1 cursor-pointer">
+                                    <div className="text-[10px] text-neutral-600 border border-neutral-200 rounded-lg py-1 hover:bg-neutral-100 transition text-center">
+                                      Ganti
+                                    </div>
+                                    <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden"
+                                      onChange={e => handleFileChange(e, "biodata", field.key)} />
+                                  </label>
+                                </div>
                               </div>
                             ) : (
                               <label className="w-full cursor-pointer">
@@ -1437,910 +1492,34 @@ export default function App() {
           )}
 
           {/* ═══════════════════════════════════════════════
-              ROLE: PEMILIK (OWNER DASHBOARD) - UPDATED
-          ═══════════════════════════════════════════════ */}
-          {currentRole === "pemilik" && (
-            <motion.div key="pemilik" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
-              className="flex-1 flex flex-col lg:flex-row">
-              <aside className="w-full lg:w-64 bg-[#f2f4f6] border-r border-neutral-200 p-5 flex flex-col gap-6 shrink-0 lg:h-[calc(100vh-68px)] lg:sticky lg:top-0">
-                <div>
-                  <h3 className="text-md font-bold text-neutral-800">Owner Panel</h3>
-                  <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-black mt-0.5">{currentUser.name}</p>
-                </div>
-                <nav className="flex flex-col gap-1">
-                  {[
-                    { key: "dashboard", icon: <BarChart3 className="h-4 w-4" />, label: "Dashboard" },
-                    { key: "manajemen-kamar", icon: <Bed className="h-4 w-4" />, label: "Manajemen Kamar" },
-                    { key: "pengajuan-sewa", icon: <ClipboardList className="h-4 w-4" />, label: "Pengajuan Sewa", badge: pengajuanSewaKosList.filter(p => p.status === "MENUNGGU").length },
-                    { key: "tiket-perbaikan", icon: <Wrench className="h-4 w-4" />, label: "Tiket Perbaikan", badge: laporanList.filter(l => l.status !== "SELESAI").length },
-                    { key: "keuangan", icon: <TrendingUp className="h-4 w-4" />, label: "Keuangan" },
-                    { key: "info-kost", icon: <Building className="h-4 w-4" />, label: "Info Kost" },
-                  ].map(item => (
-                    <button key={item.key} onClick={() => setOwnerPage(item.key)}
-                      className={`px-4 py-2 text-xs font-bold rounded-lg flex items-center gap-2.5 transition ${ownerPage === item.key ? "bg-emerald-700 text-white shadow-sm" : "text-neutral-500 hover:bg-neutral-100"}`}>
-                      {item.icon} {item.label}
-                      {item.badge > 0 && (
-                        <span className="ml-auto bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.badge}</span>
-                      )}
-                    </button>
-                  ))}
-                </nav>
-              </aside>
-
-              <main className="flex-1 p-6 lg:p-8 max-w-5xl mx-auto w-full">
-
-                {/* Owner: Dashboard */}
-                {ownerPage === "dashboard" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Dashboard Owner</h2>
-                      <p className="text-xs text-neutral-500">Selamat datang, {currentUser.name}. Berikut ringkasan kost Anda.</p>
-                    </header>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                      {[
-                        { label: "Total Kamar", val: kamarOwnerList.length, icon: <Bed className="h-5 w-5" />, color: "bg-neutral-50 border-neutral-200", text: "text-neutral-800", iconBg: "bg-neutral-200" },
-                        { label: "Kamar Terisi", val: kamarOwnerList.filter(k => k.status === "Terisi").length, icon: <Users className="h-5 w-5" />, color: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", iconBg: "bg-emerald-200" },
-                        { label: "Kamar Kosong", val: kamarOwnerList.filter(k => k.status === "Kosong").length, icon: <DoorOpen className="h-5 w-5" />, color: "bg-blue-50 border-blue-200", text: "text-blue-700", iconBg: "bg-blue-200" },
-                        { label: "Pengajuan Baru", val: pengajuanSewa.filter(p => p.status === "MENUNGGU").length, icon: <ClipboardList className="h-5 w-5" />, color: "bg-amber-50 border-amber-200", text: "text-amber-700", iconBg: "bg-amber-200" },
-                      ].map(s => (
-                        <div key={s.label} className={`${s.color} border rounded-2xl p-4 flex flex-col gap-3`}>
-                          <div className={`${s.iconBg} w-9 h-9 rounded-xl flex items-center justify-center ${s.text}`}>{s.icon}</div>
-                          <div>
-                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{s.label}</p>
-                            <p className={`text-2xl font-black mt-0.5 ${s.text}`}>{s.val}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-white border border-neutral-200 rounded-2xl p-5">
-                        <h3 className="text-sm font-bold text-neutral-800 mb-4 flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-emerald-700" /> Pendapatan Bulan Ini
-                        </h3>
-                        <p className="text-3xl font-black text-emerald-800">
-                          Rp {fmt(kamarOwnerList.filter(k => k.status === "Terisi").reduce((sum, k) => sum + k.harga, 0))}
-                        </p>
-                        <p className="text-xs text-neutral-500 mt-1">Dari {kamarOwnerList.filter(k => k.status === "Terisi").length} kamar terisi</p>
-                        <div className="mt-4 pt-4 border-t border-neutral-100">
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">Potensi Penuh</p>
-                          <p className="text-lg font-black text-neutral-700">
-                            Rp {fmt(kamarOwnerList.reduce((sum, k) => sum + k.harga, 0))}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-white border border-neutral-200 rounded-2xl p-5">
-                        <h3 className="text-sm font-bold text-neutral-800 mb-4 flex items-center gap-2">
-                          <Wrench className="h-4 w-4 text-amber-600" /> Tiket Aktif
-                        </h3>
-                        {laporanList.filter(l => l.status !== "SELESAI").length === 0 ? (
-                          <div className="text-center py-6">
-                            <CheckCircle className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
-                            <p className="text-xs text-neutral-500">Tidak ada tiket aktif</p>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-2">
-                            {laporanList.filter(l => l.status !== "SELESAI").slice(0, 3).map(item => (
-                              <div key={item.id} className="flex items-center justify-between py-2 border-b border-neutral-100 last:border-0">
-                                <div>
-                                  <p className="text-xs font-bold text-neutral-800">{item.kendala}</p>
-                                  <p className="text-[10px] text-neutral-400">{item.kategori} • {item.tanggal}</p>
-                                </div>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${item.status === "BARU" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                                  {item.status}
-                                </span>
-                              </div>
-                            ))}
-                            <button onClick={() => setOwnerPage("tiket-perbaikan")} className="text-xs text-emerald-700 font-bold hover:underline mt-1">
-                              Lihat semua →
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Owner: Manajemen Kamar */}
-                {ownerPage === "manajemen-kamar" && (
-                  <>
-                    <header className="mb-6 flex justify-between items-start">
-                      <div>
-                        <h2 className="text-xl font-bold tracking-tight text-neutral-900">Manajemen Kamar</h2>
-                        <p className="text-xs text-neutral-500">Pantau dan kelola semua unit kamar kost Anda.</p>
-                      </div>
-                      <button onClick={() => setShowAddKamar(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition shadow">
-                        <PlusCircle className="h-4 w-4" /> Tambah Kamar
-                      </button>
-                    </header>
-
-                    {showAddKamar && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
-                          <h3 className="text-base font-bold text-neutral-900">Tambah Kamar Baru</h3>
-                          <form onSubmit={handleAddKamar} className="flex flex-col gap-3">
-                            <div>
-                              <label className="block text-xs font-bold text-neutral-600 mb-1">Nomor Kamar</label>
-                              <input type="text" placeholder="Kamar 07" required
-                                value={addKamarForm.nomor} onChange={e => setAddKamarForm({...addKamarForm, nomor: e.target.value})}
-                                className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-neutral-600 mb-1">Lantai</label>
-                              <select value={addKamarForm.lantai} onChange={e => setAddKamarForm({...addKamarForm, lantai: e.target.value})}
-                                className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                                <option value={1}>Lantai 1</option>
-                                <option value={2}>Lantai 2</option>
-                                <option value={3}>Lantai 3</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-neutral-600 mb-1">Harga/Bulan</label>
-                              <input type="number" placeholder="1500000" required min={500000}
-                                value={addKamarForm.harga} onChange={e => setAddKamarForm({...addKamarForm, harga: e.target.value})}
-                                className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600" />
-                            </div>
-                            <div className="flex gap-3 mt-2">
-                              <button type="button" onClick={() => setShowAddKamar(false)}
-                                className="flex-1 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-sm rounded-xl transition">Batal</button>
-                              <button type="submit"
-                                className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm rounded-xl transition">Tambah</button>
-                            </div>
-                          </form>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                      {[
-                        { label: "Total", val: kamarOwnerList.length, color: "bg-neutral-50 border-neutral-200", text: "text-neutral-800" },
-                        { label: "Terisi", val: kamarOwnerList.filter(k => k.status === "Terisi").length, color: "bg-emerald-50 border-emerald-200", text: "text-emerald-700" },
-                        { label: "Kosong", val: kamarOwnerList.filter(k => k.status === "Kosong").length, color: "bg-blue-50 border-blue-200", text: "text-blue-700" },
-                        { label: "Maintenance", val: kamarOwnerList.filter(k => k.status === "Maintenance").length, color: "bg-amber-50 border-amber-200", text: "text-amber-700" },
-                      ].map(s => (
-                        <div key={s.label} className={`${s.color} border rounded-xl p-4`}>
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{s.label}</p>
-                          <p className={`text-2xl font-black mt-1 ${s.text}`}>{s.val}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {kamarOwnerList.map(kamar => (
-                        <div key={kamar.id} className={`bg-white border rounded-2xl p-5 flex flex-col gap-3 shadow-xs ${kamar.status === "Kosong" ? "border-blue-200" : kamar.status === "Maintenance" ? "border-amber-200" : "border-neutral-200"}`}>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="text-sm font-bold text-neutral-800">{kamar.nomor}</h4>
-                              <p className="text-[10px] text-neutral-400 font-medium">Lantai {kamar.lantai}</p>
-                            </div>
-                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${kamar.status === "Terisi" ? "bg-emerald-100 text-emerald-700" : kamar.status === "Kosong" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                              {kamar.status}
-                            </span>
-                          </div>
-                          <div className="border-t border-neutral-100 pt-3 flex flex-col gap-1.5">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-neutral-500">Harga/bulan</span>
-                              <span className="font-bold text-emerald-700">Rp {fmt(kamar.harga)}</span>
-                            </div>
-                            {kamar.penyewa && (
-                              <div className="flex justify-between text-xs">
-                                <span className="text-neutral-500">Penyewa</span>
-                                <span className="font-bold text-neutral-700 truncate max-w-[140px]">{kamar.penyewa}</span>
-                              </div>
-                            )}
-                            {kamar.masukSejak && (
-                              <div className="flex justify-between text-xs">
-                                <span className="text-neutral-500">Masuk sejak</span>
-                                <span className="font-medium text-neutral-600">{kamar.masukSejak}</span>
-                              </div>
-                            )}
-                            {kamar.kontrakHingga && (
-                              <div className="flex justify-between text-xs">
-                                <span className="text-neutral-500">Kontrak hingga</span>
-                                <span className="font-medium text-neutral-600">{kamar.kontrakHingga}</span>
-                              </div>
-                            )}
-                          </div>
-                          {kamar.status !== "Terisi" && (
-                            <div className="flex gap-2 mt-1">
-                              {kamar.status === "Kosong" && (
-                                <button onClick={() => handleUpdateKamarStatus(kamar.id, "Maintenance")}
-                                  className="flex-1 py-1.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition">
-                                  Set Maintenance
-                                </button>
-                              )}
-                              {kamar.status === "Maintenance" && (
-                                <button onClick={() => handleUpdateKamarStatus(kamar.id, "Kosong")}
-                                  className="flex-1 py-1.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
-                                  Selesai Maintenance
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {/* Owner: Pengajuan Sewa - now receives from tenants after admin verif */}
-                {ownerPage === "pengajuan-sewa" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Pengajuan Sewa Masuk</h2>
-                      <p className="text-xs text-neutral-500">Daftar penyewa yang mengajukan sewa kamar kost Anda. Data penyewa sudah diverifikasi admin.</p>
-                    </header>
-
-                    {pengajuanSewaKosList.filter(p => p.ownerId === currentUser.id || true).length === 0 ? (
-                      <div className="bg-white border border-neutral-200 rounded-2xl p-12 text-center">
-                        <ClipboardList className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
-                        <p className="text-sm font-bold text-neutral-500">Belum ada pengajuan sewa</p>
-                        <p className="text-xs text-neutral-400 mt-1">Pengajuan dari penyewa akan muncul di sini setelah data mereka diverifikasi admin.</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-4">
-                        {pengajuanSewaKosList.map(app => (
-                          <div key={app.id} className={`bg-white border rounded-2xl p-5 shadow-xs ${app.status === "MENUNGGU" ? "border-amber-200" : app.status === "DITERIMA" ? "border-emerald-200" : "border-red-200"}`}>
-                            <div className="flex flex-col md:flex-row gap-5 items-start md:items-center">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${app.status === "MENUNGGU" ? "bg-amber-100 text-amber-700" : app.status === "DITERIMA" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                    {app.status}
-                                  </span>
-                                  {app.isPatungan && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Patungan</span>}
-                                  <span className="text-[10px] text-neutral-400">{new Date(app.createdAt).toLocaleDateString("id-ID")}</span>
-                                </div>
-                                <h4 className="text-base font-bold text-neutral-900">{app.namaLengkap}</h4>
-                                <p className="text-xs text-neutral-500 mt-0.5">{app.email}</p>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                                  <div className="bg-neutral-50 rounded-lg p-2.5">
-                                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Kost</p>
-                                    <p className="text-xs font-bold text-neutral-800 mt-0.5">{app.namaKost}</p>
-                                  </div>
-                                  <div className="bg-neutral-50 rounded-lg p-2.5">
-                                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Durasi</p>
-                                    <p className="text-xs font-bold text-neutral-800 mt-0.5">{app.durasi} Bulan</p>
-                                  </div>
-                                  <div className="bg-neutral-50 rounded-lg p-2.5">
-                                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Total</p>
-                                    <p className="text-xs font-bold text-emerald-700 mt-0.5">Rp {fmt(app.totalTagihan)}</p>
-                                  </div>
-                                  <div className="bg-neutral-50 rounded-lg p-2.5">
-                                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Tipe</p>
-                                    <p className="text-xs font-bold text-neutral-800 mt-0.5 capitalize">{app.tipe}</p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 w-full md:w-auto shrink-0">
-                                {app.status === "MENUNGGU" ? (
-                                  <>
-                                    <button onClick={() => handleDecisionPengajuanSewaKos(app.id, "DITOLAK")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-neutral-100 hover:bg-red-50 hover:text-red-700 text-neutral-700 text-xs font-bold transition border border-neutral-200">
-                                      Tolak
-                                    </button>
-                                    <button onClick={() => handleDecisionPengajuanSewaKos(app.id, "DITERIMA")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow">
-                                      Terima
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span className={`py-1.5 px-3 rounded-lg text-xs font-bold uppercase border ${app.status === "DITERIMA" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                                    {app.status}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Data lengkap penyewa (terverifikasi admin) */}
-                            {app.dataPenyewa && (
-                              <div className="mt-4 pt-4 border-t border-neutral-100">
-                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                  <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> Data Penyewa (Terverifikasi Admin)
-                                </p>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                  {[
-                                    { label: "Nama Lengkap", val: app.dataPenyewa.namaLengkap },
-                                    { label: "No. HP", val: app.dataPenyewa.noHp },
-                                    { label: "Pekerjaan", val: app.dataPenyewa.pekerjaan },
-                                    { label: "Jenis Kelamin", val: app.dataPenyewa.jenisKelamin },
-                                    { label: "Email", val: app.dataPenyewa.email },
-                                    { label: "Alamat", val: app.dataPenyewa.alamat },
-                                  ].map(d => (
-                                    <div key={d.label} className="bg-emerald-50/50 rounded-lg p-2.5 border border-emerald-100">
-                                      <p className="text-[10px] text-neutral-400 font-bold">{d.label}</p>
-                                      <p className="text-xs font-bold text-neutral-800 mt-0.5">{d.val || "-"}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="flex flex-wrap gap-2 mt-3">
-                                  {[
-                                    { label: "KTP", val: app.dataPenyewa.ktpUrl },
-                                    { label: "KK", val: app.dataPenyewa.kkUrl },
-                                    { label: "Foto Diri", val: app.dataPenyewa.fotoUrl },
-                                  ].map(doc => (
-                                    <span key={doc.label} className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1 ${doc.val ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-100 text-neutral-400 border-neutral-200"}`}>
-                                      {doc.val ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                      {doc.label}: {doc.val || "Tidak ada"}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Owner: Tiket Perbaikan */}
-                {ownerPage === "tiket-perbaikan" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Tiket Perbaikan</h2>
-                      <p className="text-xs text-neutral-500">Laporan kerusakan dari penyewa yang perlu ditindaklanjuti.</p>
-                    </header>
-
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex justify-between items-center">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Semua Tiket Masuk</h3>
-                        <span className="text-[10px] bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full">
-                          {laporanList.filter(l => l.status !== "SELESAI").length} Aktif
-                        </span>
-                      </div>
-                      {laporanList.length === 0 ? (
-                        <div className="p-12 text-center text-neutral-400 text-sm">Belum ada tiket perbaikan masuk.</div>
-                      ) : (
-                        <div className="divide-y divide-neutral-100">
-                          {laporanList.map(item => (
-                            <div key={item.id} className="p-5 flex flex-col md:flex-row gap-4 items-start md:items-center">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="bg-neutral-100 px-2 py-0.5 rounded font-mono text-[10px] font-bold">{item.kategori}</span>
-                                  <span className="text-[10px] text-neutral-400">{item.tanggal}</span>
-                                </div>
-                                <h4 className="text-sm font-bold text-neutral-800">{item.kendala}</h4>
-                                <p className="text-xs text-neutral-500 mt-0.5">{item.detail}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase ${item.status === "SELESAI" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : item.status === "BARU" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${item.status === "SELESAI" ? "bg-emerald-700" : item.status === "BARU" ? "bg-blue-600" : "bg-amber-600"}`}></span>
-                                  {item.status}
-                                </span>
-                                {item.status !== "SELESAI" && (
-                                  <button
-                                    onClick={() => setLaporanList(laporanList.map(l => l.id === item.id ? { ...l, status: l.status === "BARU" ? "DIPROSES" : "SELESAI" } : l))}
-                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded-lg transition">
-                                    {item.status === "BARU" ? "Proses" : "Selesaikan"}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Owner: Keuangan */}
-                {ownerPage === "keuangan" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Laporan Keuangan</h2>
-                      <p className="text-xs text-neutral-500">Ringkasan pendapatan dan pembayaran sewa kost Anda.</p>
-                    </header>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      {[
-                        { label: "Pendapatan Bulan Ini", val: fmt(kamarOwnerList.filter(k => k.status === "Terisi").reduce((s, k) => s + k.harga, 0)), sub: "Dari kamar terisi", color: "bg-emerald-50 border-emerald-200", text: "text-emerald-800" },
-                        { label: "Potensi Penuh", val: fmt(kamarOwnerList.reduce((s, k) => s + k.harga, 0)), sub: "Jika semua terisi", color: "bg-blue-50 border-blue-200", text: "text-blue-800" },
-                        { label: "Tingkat Hunian", val: `${Math.round((kamarOwnerList.filter(k => k.status === "Terisi").length / kamarOwnerList.length) * 100)}%`, sub: `${kamarOwnerList.filter(k => k.status === "Terisi").length} dari ${kamarOwnerList.length} kamar`, color: "bg-amber-50 border-amber-200", text: "text-amber-800" },
-                      ].map(s => (
-                        <div key={s.label} className={`${s.color} border rounded-2xl p-5`}>
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{s.label}</p>
-                          <p className={`text-2xl font-black mt-1 ${s.text}`}>Rp {s.val}</p>
-                          <p className="text-xs text-neutral-500 mt-1">{s.sub}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-white border border-neutral-200 rounded-2xl p-6">
-                      <h3 className="text-sm font-bold text-neutral-800 mb-4">Rincian Per Kamar</h3>
-                      <div className="flex flex-col gap-2">
-                        {kamarOwnerList.map(kamar => (
-                          <div key={kamar.id} className="flex items-center justify-between py-2.5 px-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full ${kamar.status === "Terisi" ? "bg-emerald-500" : kamar.status === "Kosong" ? "bg-blue-400" : "bg-amber-400"}`}></div>
-                              <div>
-                                <p className="text-xs font-bold text-neutral-800">{kamar.nomor}</p>
-                                <p className="text-[10px] text-neutral-400">{kamar.penyewa || kamar.status}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <p className="text-xs font-bold text-neutral-700">Rp {fmt(kamar.harga)}/bln</p>
-                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${kamar.status === "Terisi" ? "bg-emerald-100 text-emerald-700" : kamar.status === "Kosong" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                                {kamar.status}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Owner: Info Kost */}
-                {ownerPage === "info-kost" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Informasi Kost</h2>
-                      <p className="text-xs text-neutral-500">Kelola informasi dan deskripsi kost Anda yang tampil di platform.</p>
-                    </header>
-
-                    {ownerKostMsg && (
-                      <div className={`p-3 rounded-xl text-xs font-medium border mb-4 ${ownerKostMsg.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
-                        {ownerKostMsg.text}
-                      </div>
-                    )}
-
-                    <div className="bg-white border border-neutral-200 rounded-2xl p-6 flex flex-col gap-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {[
-                          { label: "Nama Kost", key: "namaKost", placeholder: "Nama kost Anda" },
-                          { label: "Daerah / Kawasan", key: "daerah", placeholder: "Setia Budi, Padang Bulan, dll" },
-                        ].map(f => (
-                          <div key={f.key}>
-                            <label className="block text-xs font-bold text-neutral-600 mb-1">{f.label}</label>
-                            <input type="text" placeholder={f.placeholder}
-                              value={ownerKostInfo[f.key]}
-                              onChange={e => setOwnerKostInfo({...ownerKostInfo, [f.key]: e.target.value})}
-                              className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition" />
-                          </div>
-                        ))}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-600 mb-1">Alamat Lengkap</label>
-                        <input type="text" placeholder="Jl. Contoh No. 1, Medan"
-                          value={ownerKostInfo.alamat}
-                          onChange={e => setOwnerKostInfo({...ownerKostInfo, alamat: e.target.value})}
-                          className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-600 mb-1">Deskripsi Kost</label>
-                        <textarea rows={3} placeholder="Deskripsikan kost Anda..."
-                          value={ownerKostInfo.deskripsi}
-                          onChange={e => setOwnerKostInfo({...ownerKostInfo, deskripsi: e.target.value})}
-                          className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition resize-none" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-600 mb-1">Harga Dasar / Bulan</label>
-                        <input type="number" min={500000}
-                          value={ownerKostInfo.hargaDasar}
-                          onChange={e => setOwnerKostInfo({...ownerKostInfo, hargaDasar: Number(e.target.value)})}
-                          className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition" />
-                      </div>
-                      <button
-                        onClick={() => { setOwnerKostMsg({ type: "success", text: "Informasi kost berhasil disimpan!" }); setTimeout(() => setOwnerKostMsg(null), 3000); }}
-                        className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2">
-                        <CheckCircle className="h-4 w-4" /> Simpan Informasi Kost
-                      </button>
-                    </div>
-                  </>
-                )}
-              </main>
-            </motion.div>
-          )}
-
-          {/* ═══════════════════════════════════════════════
               ROLE: ADMIN
           ═══════════════════════════════════════════════ */}
           {currentRole === "admin" && (
             <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
               className="flex-1 flex flex-col lg:flex-row">
-              <aside className="w-full lg:w-64 bg-zinc-900 text-zinc-100 p-5 flex flex-col gap-6 shrink-0 lg:h-[calc(100vh-68px)] lg:sticky lg:top-0">
-                <div>
-                  <h3 className="text-md font-bold text-zinc-200">Admin Central</h3>
-                  <p className="text-[10px] text-emerald-400 font-mono tracking-widest uppercase mt-0.5">Control Panel</p>
-                </div>
-                <nav className="flex flex-col gap-1">
-                  {[
-                    { key: "verifikasi-data-diri", icon: <UserCheck className="h-4 w-4" />, label: "Verifikasi Data Diri", badge: verifikasiDataDiriList.filter(v => v.status === "PENDING").length },
-                    { key: "verifikasi-pemilik", icon: <ClipboardCheck className="h-4 w-4" />, label: "Verifikasi Pemilik" },
-                    { key: "verifikasi-berkas", icon: <FileText className="h-4 w-4" />, label: "Berkas Penyewa", badge: verifikasiBerkasList.filter(v => v.status === "PENDING").length },
-                    { key: "pengajuan-owner", icon: <Building className="h-4 w-4" />, label: "Pengajuan Owner", badge: pengajuanOwnerList.filter(p => p.status === "PENDING").length },
-                    { key: "pengajuan-sewa-admin", icon: <ClipboardList className="h-4 w-4" />, label: "Pengajuan Sewa", badge: pengajuanSewa.filter(p => p.status === "MENUNGGU").length },
-                    { key: "tiket-admin", icon: <Wrench className="h-4 w-4" />, label: "Tiket Perbaikan", badge: laporanList.filter(l => l.status !== "SELESAI").length },
-                  ].map(item => (
-                    <button key={item.key} onClick={() => setAdminPage(item.key)}
-                      className={`px-4 py-2 text-xs font-bold rounded-lg flex items-center gap-2.5 transition ${adminPage === item.key ? "bg-emerald-600 text-white" : "text-zinc-400 hover:bg-zinc-800"}`}>
-                      {item.icon} {item.label}
-                      {item.badge > 0 && (
-                        <span className="ml-auto bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.badge}</span>
-                      )}
-                    </button>
-                  ))}
-                </nav>
-              </aside>
+              <AdminDashboard
+                currentUser={currentUser}
+                verifikasiDataDiriList={verifikasiDataDiriList}
+                pengajuanOwnerList={pengajuanOwnerList}
+                handleDecisionVerifikasiDataDiri={handleDecisionVerifikasiDataDiri}
+                handleDecisionPengajuanOwner={handleDecisionPengajuanOwner}
+              />
+            </motion.div>
+          )}
 
-              <main className="flex-1 p-6 lg:p-8 max-w-5xl mx-auto w-full">
-
-                {/* Admin: Verifikasi Data Diri Penyewa */}
-                {adminPage === "verifikasi-data-diri" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Verifikasi Data Diri Penyewa</h2>
-                      <p className="text-xs text-neutral-500">Tinjau dan verifikasi data diri (KTP, KK, foto) yang dikirim penyewa. Setelah disetujui, penyewa bisa menyewa kamar.</p>
-                    </header>
-
-                    <div className="grid grid-cols-3 gap-4 mb-6">
-                      {[
-                        { label: "Total Pengajuan", val: verifikasiDataDiriList.length, color: "bg-neutral-50 border-neutral-200", text: "text-neutral-800" },
-                        { label: "Menunggu", val: verifikasiDataDiriList.filter(v => v.status === "PENDING").length, color: "bg-amber-50 border-amber-200", text: "text-amber-700" },
-                        { label: "Disetujui", val: verifikasiDataDiriList.filter(v => v.status === "DISETUJUI").length, color: "bg-emerald-50 border-emerald-200", text: "text-emerald-700" },
-                      ].map(s => (
-                        <div key={s.label} className={`${s.color} border rounded-xl p-4`}>
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{s.label}</p>
-                          <p className={`text-2xl font-black mt-1 ${s.text}`}>{s.val}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex justify-between items-center">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                          Pengajuan Verifikasi Data Diri ({verifikasiDataDiriList.filter(v => v.status === "PENDING").length} Pending)
-                        </h3>
-                      </div>
-                      {verifikasiDataDiriList.length === 0 ? (
-                        <div className="p-12 text-center text-neutral-400 text-sm">Belum ada pengajuan verifikasi data diri.</div>
-                      ) : (
-                        <div className="divide-y divide-neutral-100">
-                          {verifikasiDataDiriList.map(v => (
-                            <div key={v.id} className="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${v.status === "PENDING" ? "bg-amber-100 text-amber-700" : v.status === "DISETUJUI" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                    {v.status === "PENDING" ? "⏳ Menunggu" : v.status === "DISETUJUI" ? "✓ Disetujui" : "✗ Ditolak"}
-                                  </span>
-                                  <span className="text-[10px] text-neutral-400">{new Date(v.createdAt).toLocaleDateString("id-ID")}</span>
-                                </div>
-                                <h4 className="text-sm font-bold text-neutral-800">{v.namaLengkap}</h4>
-                                <p className="text-xs text-neutral-500 mt-0.5">{v.email} • {v.noHp}</p>
-                                <p className="text-xs text-neutral-600 mt-0.5">Pekerjaan: <span className="font-bold">{v.pekerjaan}</span></p>
-                                <div className="flex flex-wrap gap-1.5 mt-3">
-                                  {[
-                                    { label: "KTP", val: v.ktpUrl },
-                                    { label: "KK", val: v.kkUrl },
-                                    { label: "Foto Diri", val: v.fotoUrl }
-                                  ].map(doc => (
-                                    <span key={doc.label} className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1 ${doc.val ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-100 text-neutral-400 border-neutral-200"}`}>
-                                      {doc.val ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                      {doc.label}: {doc.val || "Tidak ada"}
-                                    </span>
-                                  ))}
-                                </div>
-                                {v.status === "DISETUJUI" && (
-                                  <p className="text-xs text-emerald-700 font-bold mt-2 flex items-center gap-1">
-                                    <CheckCircle className="h-3.5 w-3.5" /> Penyewa sudah bisa menyewa kamar kost
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex gap-2 w-full md:w-auto shrink-0">
-                                {v.status === "PENDING" ? (
-                                  <>
-                                    <button onClick={() => handleDecisionVerifikasiDataDiri(v.id, "DITOLAK")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-neutral-100 hover:bg-red-50 hover:text-red-700 text-neutral-700 text-xs font-bold transition border border-neutral-200">
-                                      Tolak
-                                    </button>
-                                    <button onClick={() => handleDecisionVerifikasiDataDiri(v.id, "DISETUJUI")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow">
-                                      Setujui
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span className={`py-1.5 px-3 rounded-lg text-xs font-bold uppercase border ${v.status === "DISETUJUI" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                                    {v.status}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Admin: Verifikasi Pemilik */}
-                {adminPage === "verifikasi-pemilik" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Verifikasi Berkas Pemilik</h2>
-                      <p className="text-xs text-neutral-500">Tinjau dan validasi pendaftaran pemilik kost baru.</p>
-                    </header>
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 border-b border-neutral-200 text-[10px] font-black uppercase text-neutral-500 tracking-wider">
-                        <div className="col-span-4">Pemilik & Kost</div>
-                        <div className="col-span-3">Lokasi</div>
-                        <div className="col-span-3">Dokumen</div>
-                        <div className="col-span-2 text-right">Aksi</div>
-                      </div>
-                      <div className="divide-y divide-neutral-100">
-                        {verifikasiList.map(pemilik => (
-                          <div key={pemilik.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-neutral-50/50 transition">
-                            <div className="col-span-4 flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center">
-                                {pemilik.namaPemilik.split(" ").map(n => n[0]).join("")}
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-neutral-800">{pemilik.namaPemilik}</h4>
-                                <p className="text-[10px] text-neutral-500 flex items-center gap-1 mt-0.5"><Bed className="h-3 w-3" /> {pemilik.namaKost}</p>
-                              </div>
-                            </div>
-                            <div className="col-span-3">
-                              <span className="text-xs font-bold text-neutral-700">{pemilik.lokasi}</span>
-                              <span className="block text-[10px] font-semibold text-neutral-400">{pemilik.kecamatan}</span>
-                            </div>
-                            <div className="col-span-3 flex flex-wrap gap-1">
-                              {pemilik.dokumen.map(doc => (
-                                <span key={doc} className="bg-neutral-100 border border-neutral-200 text-[10px] font-bold text-neutral-600 px-2.5 py-0.5 rounded">📄 {doc}</span>
-                              ))}
-                            </div>
-                            <div className="col-span-2 flex justify-end gap-2.5">
-                              {pemilik.status === "PENDING" ? (
-                                <>
-                                  <button onClick={() => handleDecisionVerifikasi(pemilik.id, "DITOLAK")}
-                                    className="p-1 px-2.5 hover:bg-red-100 text-red-600 font-black rounded text-[11px]">Tolak</button>
-                                  <button onClick={() => handleDecisionVerifikasi(pemilik.id, "DISETUJUI")}
-                                    className="p-1 px-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded text-[11px]">Setujui</button>
-                                </>
-                              ) : (
-                                <span className={`p-1 px-2.5 rounded text-[10px] font-extrabold uppercase border ${pemilik.status === "DISETUJUI" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                                  {pemilik.status}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Admin: Verifikasi Berkas Penyewa */}
-                {adminPage === "verifikasi-berkas" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Verifikasi Berkas Penyewa</h2>
-                      <p className="text-xs text-neutral-500">Tinjau berkas KTP, KK, dan foto penyewa yang mengajukan sewa kamar.</p>
-                    </header>
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex justify-between items-center">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                          Pengajuan Berkas ({verifikasiBerkasList.filter(v => v.status === "PENDING").length} Pending)
-                        </h3>
-                      </div>
-                      {verifikasiBerkasList.length === 0 ? (
-                        <div className="p-12 text-center text-neutral-400 text-sm">Belum ada pengajuan berkas penyewa.</div>
-                      ) : (
-                        <div className="divide-y divide-neutral-100">
-                          {verifikasiBerkasList.map(v => (
-                            <div key={v.id} className="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.status === "PENDING" ? "bg-amber-100 text-amber-700" : v.status === "DISETUJUI" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                    {v.status}
-                                  </span>
-                                  {v.isPatungan && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Patungan</span>}
-                                </div>
-                                <h4 className="text-sm font-bold text-neutral-800">{v.namaLengkap}</h4>
-                                <p className="text-xs text-neutral-500 mt-0.5">{v.email} • {v.namaKost}</p>
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {[{ label: "KTP", val: v.ktpUrl }, { label: "KK", val: v.kkUrl }, { label: "Foto", val: v.fotoUrl }].map(doc => (
-                                    <span key={doc.label} className={`text-[10px] font-bold px-2 py-0.5 rounded border ${doc.val ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-100 text-neutral-400 border-neutral-200"}`}>
-                                      {doc.val ? "✓" : "✗"} {doc.label}: {doc.val || "Tidak ada"}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="flex gap-2 w-full md:w-auto">
-                                {v.status === "PENDING" ? (
-                                  <>
-                                    <button onClick={() => handleDecisionVerifikasiBerkas(v.id, "DITOLAK")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold transition">Tolak</button>
-                                    <button onClick={() => handleDecisionVerifikasiBerkas(v.id, "DISETUJUI")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition">Setujui</button>
-                                  </>
-                                ) : (
-                                  <span className={`py-1.5 px-3 rounded-lg text-xs font-bold uppercase border ${v.status === "DISETUJUI" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                                    {v.status}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Admin: Pengajuan Owner */}
-                {adminPage === "pengajuan-owner" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Pengajuan Menjadi Owner</h2>
-                      <p className="text-xs text-neutral-500">Tinjau pengajuan pengguna yang ingin mendaftarkan kost mereka. Jika disetujui, role akun akan otomatis berubah menjadi Owner.</p>
-                    </header>
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="p-4 bg-neutral-50 border-b border-neutral-100">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                          Pengajuan Owner ({pengajuanOwnerList.filter(p => p.status === "PENDING").length} Pending)
-                        </h3>
-                      </div>
-                      {pengajuanOwnerList.length === 0 ? (
-                        <div className="p-12 text-center text-neutral-400 text-sm">Belum ada pengajuan owner.</div>
-                      ) : (
-                        <div className="divide-y divide-neutral-100">
-                          {pengajuanOwnerList.map(p => (
-                            <div key={p.id} className="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.status === "PENDING" ? "bg-amber-100 text-amber-700" : p.status === "DISETUJUI" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                    {p.status}
-                                  </span>
-                                  <span className="text-[10px] text-neutral-400">{new Date(p.createdAt).toLocaleDateString("id-ID")}</span>
-                                </div>
-                                <h4 className="text-sm font-bold text-neutral-800">{p.namaLengkap}</h4>
-                                <p className="text-xs text-neutral-500 mt-0.5">{p.email}</p>
-                                <p className="text-xs font-bold text-neutral-700 mt-1 flex items-center gap-1">
-                                  <Building className="h-3.5 w-3.5 text-emerald-700" /> {p.namaKost} – {p.daerah}
-                                </p>
-                                <p className="text-xs text-neutral-500 mt-0.5">{p.alamatKost}</p>
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {[{ label: "KTP", val: p.ktpUrl }, { label: "Surat Kepemilikan", val: p.suratKepemilikanUrl }, { label: "Foto Kost", val: p.fotoKostUrl }].map(doc => (
-                                    <span key={doc.label} className={`text-[10px] font-bold px-2 py-0.5 rounded border ${doc.val ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-100 text-neutral-400 border-neutral-200"}`}>
-                                      {doc.val ? "✓" : "✗"} {doc.label}
-                                    </span>
-                                  ))}
-                                </div>
-                                {p.status === "DISETUJUI" && (
-                                  <p className="text-xs text-emerald-700 font-bold mt-2 flex items-center gap-1">
-                                    <CheckCircle className="h-3.5 w-3.5" /> Role akun telah diubah menjadi Owner
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex gap-2 w-full md:w-auto">
-                                {p.status === "PENDING" ? (
-                                  <>
-                                    <button onClick={() => handleDecisionPengajuanOwner(p.id, "DITOLAK")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold transition">Tolak</button>
-                                    <button onClick={() => handleDecisionPengajuanOwner(p.id, "DISETUJUI")}
-                                      className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition">Setujui & Ubah Role</button>
-                                  </>
-                                ) : (
-                                  <span className={`py-1.5 px-3 rounded-lg text-xs font-bold uppercase border ${p.status === "DISETUJUI" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                                    {p.status}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Admin: Pengajuan Sewa */}
-                {adminPage === "pengajuan-sewa-admin" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Pengajuan Sewa Masuk</h2>
-                      <p className="text-xs text-neutral-500">Kelola dan setujui pendaftaran sewa dari calon penyewa.</p>
-                    </header>
-
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex justify-between items-center">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                          Berkas Pengajuan ({pengajuanSewa.filter(p => p.status === "MENUNGGU").length} Menunggu)
-                        </h3>
-                      </div>
-                      <div className="divide-y divide-neutral-100">
-                        {pengajuanSewa.length === 0 ? (
-                          <div className="p-10 text-center text-neutral-400 text-sm">Belum ada pengajuan sewa masuk.</div>
-                        ) : pengajuanSewa.map(app => (
-                          <div key={app.id} className="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">{app.kamar}</span>
-                                {app.isPatungan && <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">Patungan</span>}
-                              </div>
-                              <h4 className="text-sm font-bold text-neutral-800">{app.namaPenyewa.join(" & ")}</h4>
-                              <p className="text-xs text-neutral-500 flex items-center gap-1 mt-0.5">
-                                <Briefcase className="h-3.5 w-3.5" /> {app.pekerjaan} • {app.asalKota}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="text-[10px] uppercase font-bold text-neutral-400">Harga / Bulan</span>
-                              <p className="text-lg font-black text-emerald-800">Rp {fmt(app.hargaSewaBulan)}</p>
-                              <p className="text-xs font-semibold text-neutral-500">{app.rencanaSewaBulan} Bulan</p>
-                            </div>
-                            <div className="flex gap-2 w-full md:w-auto">
-                              {app.status === "MENUNGGU" ? (
-                                <>
-                                  <button onClick={() => handleDecisionPengajuan(app.id, "TOLAK")}
-                                    className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold transition">Tolak</button>
-                                  <button onClick={() => handleDecisionPengajuan(app.id, "TERIMA")}
-                                    className="flex-1 md:flex-none py-2 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition">Terima</button>
-                                </>
-                              ) : (
-                                <span className={`w-full text-center py-1.5 px-3 rounded-lg text-xs font-bold uppercase border ${app.status === "TERIMA" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                                  {app.status}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Admin: Tiket Perbaikan */}
-                {adminPage === "tiket-admin" && (
-                  <>
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold tracking-tight text-neutral-900">Tiket Perbaikan</h2>
-                      <p className="text-xs text-neutral-500">Pantau semua laporan kerusakan dari penyewa.</p>
-                    </header>
-
-                    <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs">
-                      <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex justify-between items-center">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Semua Tiket</h3>
-                        <span className="text-[10px] bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full">
-                          {laporanList.filter(l => l.status !== "SELESAI").length} Aktif
-                        </span>
-                      </div>
-                      {laporanList.length === 0 ? (
-                        <div className="p-12 text-center text-neutral-400 text-sm">Belum ada tiket perbaikan.</div>
-                      ) : (
-                        <div className="divide-y divide-neutral-100">
-                          {laporanList.map(item => (
-                            <div key={item.id} className="p-5 flex flex-col md:flex-row gap-4 items-start md:items-center">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="bg-neutral-100 px-2 py-0.5 rounded font-mono text-[10px] font-bold">{item.kategori}</span>
-                                  <span className="text-[10px] text-neutral-400">{item.tanggal}</span>
-                                </div>
-                                <h4 className="text-sm font-bold text-neutral-800">{item.kendala}</h4>
-                                <p className="text-xs text-neutral-500 mt-0.5">{item.detail}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase ${item.status === "SELESAI" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : item.status === "BARU" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${item.status === "SELESAI" ? "bg-emerald-700" : item.status === "BARU" ? "bg-blue-600" : "bg-amber-600"}`}></span>
-                                  {item.status}
-                                </span>
-                                {item.status !== "SELESAI" && (
-                                  <button
-                                    onClick={() => setLaporanList(laporanList.map(l => l.id === item.id ? { ...l, status: l.status === "BARU" ? "DIPROSES" : "SELESAI" } : l))}
-                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded-lg transition">
-                                    {item.status === "BARU" ? "Proses" : "Selesaikan"}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </main>
+          {/* ═══════════════════════════════════════════════
+              ROLE: PEMILIK (OWNER DASHBOARD)
+          ═══════════════════════════════════════════════ */}
+          {currentRole === "pemilik" && (
+            <motion.div key="pemilik" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col lg:flex-row">
+              <OwnerDashboard
+                currentUser={currentUser}
+                laporanList={laporanList}
+                setLaporanList={setLaporanList}
+                pengajuanSewaKosList={pengajuanSewaKosList}
+                handleDecisionPengajuanSewaKos={handleDecisionPengajuanSewaKos}
+              />
             </motion.div>
           )}
 
@@ -2473,6 +1652,84 @@ export default function App() {
           <p>© 2026 PapiKost Medan System – PBO REST API Architecture Demo.</p>
         </div>
       </footer>
+
+      {/* ── Image Preview Modal ── */}
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div className="relative max-w-3xl w-full" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute -top-10 right-0 text-white hover:text-neutral-300 transition flex items-center gap-1.5 text-sm font-bold"
+            >
+              <X className="h-5 w-5" /> Tutup
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="Preview"
+              className="w-full max-h-[80vh] object-contain rounded-xl shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Kamar Modal ── */}
+      {showEditKamar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <h3 className="text-base font-bold text-neutral-900">Edit Kamar</h3>
+            <form onSubmit={handleEditKamar} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-bold text-neutral-600 mb-1">Nomor Kamar</label>
+                <input type="text" placeholder="Kamar 07" required
+                  value={editKamarForm.nomor} onChange={e => setEditKamarForm({...editKamarForm, nomor: e.target.value})}
+                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-neutral-600 mb-1">Lantai</label>
+                <select value={editKamarForm.lantai} onChange={e => setEditKamarForm({...editKamarForm, lantai: e.target.value})}
+                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                  <option value={1}>Lantai 1</option>
+                  <option value={2}>Lantai 2</option>
+                  <option value={3}>Lantai 3</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-neutral-600 mb-1">Harga/Bulan</label>
+                <input type="number" placeholder="1500000" required min={500000}
+                  value={editKamarForm.harga} onChange={e => setEditKamarForm({...editKamarForm, harga: e.target.value})}
+                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button type="button" onClick={() => { setShowEditKamar(false); setEditKamarId(null); }}
+                  className="flex-1 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-sm rounded-xl transition">Batal</button>
+                <button type="submit"
+                  className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm rounded-xl transition">Simpan</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Konfirmasi Hapus Kamar Modal ── */}
+      {showDeleteKamarId !== null && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <h3 className="text-base font-bold text-neutral-900">Hapus Kamar?</h3>
+            <p className="text-sm text-neutral-600">
+              Yakin ingin menghapus <strong>{kamarOwnerList.find(k => k.id === showDeleteKamarId)?.nomor}</strong>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteKamarId(null)}
+                className="flex-1 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-sm rounded-xl transition">Batal</button>
+              <button onClick={() => handleDeleteKamar(showDeleteKamarId)}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl transition">Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+} 

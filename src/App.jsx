@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { javaFiles } from "./javaCodeData";
 import LoginPage from "./LoginPage.jsx";
 
+
 // ─── Static mock listings ────────────────────────────────────────────────────
 const INITIAL_KAMAR_KOST = [
   {
@@ -51,9 +52,6 @@ const INITIAL_KAMAR_KOST = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) => n?.toLocaleString("id-ID");
-
-// ✨ TAMBAHAN UTAMA: SETTING API URL VERCEL ✨
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // ─── Main App ────────────────────────────────────────────────────────────────
 export default function App() {
@@ -188,7 +186,7 @@ export default function App() {
   // ─── Fetch helpers ──────────────────────────────────────────────────────────
   const fetchKamarList = async () => {
     try {
-      const r = await fetch(`${API_URL}/api/kost/medan`);
+      const r = await fetch("/api/kost/medan");
       if (r.ok) setActiveKamarList(await r.json());
     } catch { /* offline */ }
   };
@@ -196,21 +194,23 @@ export default function App() {
   const fetchLaporanList = async () => {
     if (!currentUser) return;
     try {
-      const r = await fetch(`${API_URL}/api/laporan?userId=${currentUser.id}`);
+      const r = await fetch(`/api/laporan?userId=${currentUser.id}`);
       if (r.ok) setLaporanList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchVerifikasiList = async () => {
+    // Backend tidak punya endpoint /api/verifikasi terpisah — pakai verifikasi-data-diri
     try {
-      const r = await fetch(`${API_URL}/api/verifikasi-data-diri`);
+      const r = await fetch("/api/verifikasi-data-diri");
       if (r.ok) setVerifikasiList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchPengajuanSewa = async () => {
+    // Owner: GET /api/owner/pengajuan-masuk
     try {
-      const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk`);
+      const r = await fetch("/api/owner/pengajuan-masuk");
       if (r.ok) setPengajuanSewa(await r.json());
     } catch { /* offline */ }
   };
@@ -218,7 +218,7 @@ export default function App() {
   const fetchBiodata = async () => {
     if (!currentUser) return;
     try {
-      const r = await fetch(`${API_URL}/api/biodata/${currentUser.id}`);
+      const r = await fetch(`/api/biodata/${currentUser.id}`);
       if (r.ok) {
         const data = await r.json();
         setBiodata(data);
@@ -243,39 +243,40 @@ export default function App() {
   const fetchInvites = async () => {
     if (!currentUser) return;
     try {
-      const r = await fetch(`${API_URL}/api/invite/${currentUser.id}`);
+      const r = await fetch(`/api/invite/${currentUser.id}`);
       if (r.ok) setInviteList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchPengajuanOwner = async () => {
     try {
-      const r = await fetch(`${API_URL}/api/pengajuan-owner`);
+      const r = await fetch("/api/pengajuan-owner");
       if (r.ok) setPengajuanOwnerList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchVerifikasiBerkas = async () => {
     try {
-      const r = await fetch(`${API_URL}/api/verifikasi-berkas`);
+      const r = await fetch("/api/verifikasi-berkas");
       if (r.ok) setVerifikasiBerkasList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchVerifikasiDataDiri = async () => {
     try {
-      const r = await fetch(`${API_URL}/api/verifikasi-data-diri`);
+      const r = await fetch("/api/verifikasi-data-diri");
       if (r.ok) setVerifikasiDataDiriList(await r.json());
     } catch { /* offline */ }
   };
 
   const fetchPengajuanSewaKos = async () => {
+    // Penyewa: GET /api/pengajuan/:userId | Owner: GET /api/owner/pengajuan-masuk
     try {
       if (currentUser?.role === "pemilik") {
-        const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk`);
+        const r = await fetch("/api/owner/pengajuan-masuk");
         if (r.ok) setPengajuanSewaKosList(await r.json());
       } else if (currentUser?.id) {
-        const r = await fetch(`${API_URL}/api/pengajuan/${currentUser.id}`);
+        const r = await fetch(`/api/pengajuan/${currentUser.id}`);
         if (r.ok) setPengajuanSewaKosList(await r.json());
       }
     } catch { /* offline */ }
@@ -339,7 +340,7 @@ export default function App() {
     e.preventDefault();
     if (!newKategori || !newKendala) return;
     try {
-      const r = await fetch(`${API_URL}/api/laporan`, {
+      const r = await fetch("/api/laporan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kategori: newKategori, kendala: newKendala, detail: newDetail, userId: currentUser.id }),
@@ -365,8 +366,9 @@ export default function App() {
   };
 
   const handleDecisionPengajuan = async (id, decision) => {
+    // Owner: PUT /api/owner/pengajuan-masuk/:id
     try {
-      const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk/${id}`, {
+      const r = await fetch(`/api/owner/pengajuan-masuk/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -377,8 +379,9 @@ export default function App() {
   };
 
   const handleDecisionVerifikasi = async (id, decision) => {
+    // Admin: PUT /api/verifikasi-data-diri/:id
     try {
-      const r = await fetch(`${API_URL}/api/verifikasi-data-diri/${id}`, {
+      const r = await fetch(`/api/verifikasi-data-diri/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -392,7 +395,7 @@ export default function App() {
     e.preventDefault();
     setBiodataSaving(true);
     try {
-      const r = await fetch(`${API_URL}/api/biodata/${currentUser.id}`, {
+      const r = await fetch(`/api/biodata/${currentUser.id}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(biodataForm)
       });
@@ -413,7 +416,7 @@ export default function App() {
     e.preventDefault();
     if (!inviteTargetId || !selectedKamar) return;
     try {
-      const r = await fetch(`${API_URL}/api/invite`, {
+      const r = await fetch("/api/invite", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fromUserId: currentUser.id, fromUserName: currentUser.name,
@@ -438,7 +441,7 @@ export default function App() {
 
   const handleRespondInvite = async (id, status) => {
     try {
-      const r = await fetch(`${API_URL}/api/invite/${id}`, {
+      const r = await fetch(`/api/invite/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status })
       });
@@ -448,7 +451,7 @@ export default function App() {
 
   const handleDecisionVerifikasiBerkas = async (id, decision) => {
     try {
-      const r = await fetch(`${API_URL}/api/verifikasi-berkas/${id}`, {
+      const r = await fetch(`/api/verifikasi-berkas/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -460,7 +463,7 @@ export default function App() {
 
   const handleDecisionVerifikasiDataDiri = async (id, decision, comment = "") => {
     try {
-      const r = await fetch(`${API_URL}/api/verifikasi-data-diri/${id}`, {
+      const r = await fetch(`/api/verifikasi-data-diri/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision, komentarAdmin: comment })
       });
@@ -475,8 +478,9 @@ export default function App() {
   };
 
   const handleDecisionPengajuanSewaKos = async (id, decision) => {
+    // Owner: PUT /api/owner/pengajuan-masuk/:id
     try {
-      const r = await fetch(`${API_URL}/api/owner/pengajuan-masuk/${id}`, {
+      const r = await fetch(`/api/owner/pengajuan-masuk/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision })
       });
@@ -488,7 +492,7 @@ export default function App() {
 
   const handleDecisionPengajuanOwner = async (id, decision, comment = "") => {
     try {
-      const r = await fetch(`${API_URL}/api/pengajuan-owner/${id}`, {
+      const r = await fetch(`/api/pengajuan-owner/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: decision, komentarAdmin: comment })
       });
@@ -505,7 +509,7 @@ export default function App() {
       return;
     }
     try {
-      const r = await fetch(`${API_URL}/api/pengajuan`, {
+      const r = await fetch("/api/pengajuan", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: Number(currentUser.id),
@@ -650,7 +654,7 @@ export default function App() {
 
               {/* Sidebar */}
               <aside className="w-full lg:w-64 bg-white border-r border-neutral-200 p-5 flex flex-col gap-4 shrink-0 lg:sticky lg:top-0 h-auto lg:h-[calc(100vh-68px)]">
-                  {/* Status verifikasi di sidebar */}
+                    {/* Status verifikasi di sidebar */}
                   <div className="hidden lg:flex items-center gap-3 px-1 pb-2 border-b border-neutral-100">
                     <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
                       {currentUser.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
@@ -1732,4 +1736,4 @@ export default function App() {
       )}
     </div>
   );
-} 
+}

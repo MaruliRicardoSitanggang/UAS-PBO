@@ -1,613 +1,1553 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Search, AlertTriangle, MapPin, CreditCard, Send, History,
-  Phone, Users, ArrowLeft, ArrowRight, Eye, User, Upload,
-  Bell as BellIcon, CheckCircle, XCircle, Clock, Home,
-  AlertCircle, DoorOpen, CalendarDays, Wrench, BarChart3, X
+  Search,
+  MapPin,
+  Send,
+  Home,
+  Bell as BellIcon,
+  CheckCircle,
+  XCircle,
+  Clock,
+  User,
+  Upload,
+  Eye,
+  DoorOpen,
+  Wrench,
+  AlertCircle,
+  Phone,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Star,
+  MessageCircle,
+  CalendarDays,
+  Users,
+  Package,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 const fmt = (n) => n?.toLocaleString("id-ID");
+const API = "http://localhost:8080";
 
-const INITIAL_KAMAR_KOST = [
-  {
-    id: 1, namaKost: "Kost Putra Padang Bulan", daerah: "Padang Bulan",
-    hargaDasar: 1500000, status: "Tersedia", rating: 4.8, kategori: "Putra",
-    image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&q=80&w=600",
-    wifiCepat: true, mejaBelajar: true, ac: false, availableRooms: 2,
-    availableRoomsSolo: 2, availableRoomsPatungan: 1, noWaOwner: "6281234567890",
-    description: "Kost premium minimalis dengan pencahayaan alami melimpah, cocok untuk 1 orang.",
-    descriptionPatungan: "Kamar luas untuk 2 orang dengan fasilitas lengkap, cocok untuk patungan.",
-    fotoSolo: ["https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&q=80&w=600"],
-    fotoPatungan: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&q=80&w=600"],
-  },
-  {
-    id: 2, namaKost: "Kost Eksklusif Setia Budi", daerah: "Setia Budi",
-    hargaDasar: 2200000, status: "Tersedia", rating: 4.9, kategori: "Campur",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&q=80&w=600",
-    wifiCepat: true, ac: true, kamarMandiDalam: true, kasurSpringbed: true, mejaBelajar: true,
-    availableRooms: 5, availableRoomsSolo: 3, availableRoomsPatungan: 2, noWaOwner: "6281234567891",
-    description: "Kost mewah berfasilitas lengkap dekat pusat kuliner Setia Budi Medan.",
-    descriptionPatungan: "Unit double room AC premium, cocok untuk 2 orang patungan.",
-    fotoSolo: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&q=80&w=600"],
-    fotoPatungan: ["https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600"],
-  },
-  {
-    id: 3, namaKost: "Kost Putri Dr. Mansyur", daerah: "Dr. Mansyur",
-    hargaDasar: 1300000, status: "Tersedia", rating: 4.7, kategori: "Putri",
-    image: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600",
-    wifiCepat: true, dapurBersama: true,
-    availableRooms: 1, availableRoomsSolo: 1, availableRoomsPatungan: 0, noWaOwner: "6281234567892",
-    description: "Kost putri asri di Jalan Dr. Mansyur Medan, lingkungan aman.",
-    descriptionPatungan: "Tidak tersedia kamar patungan saat ini.",
-    fotoSolo: ["https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600"],
-    fotoPatungan: [],
-  },
-  {
-    id: 4, namaKost: "Kost Sejahtera Helvetia", daerah: "Helvetia",
-    hargaDasar: 900000, status: "Tidak Tersedia", rating: 4.3, kategori: "Putra",
-    image: "https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=600",
-    wifiCepat: false, ac: false,
-    availableRooms: 0, availableRoomsSolo: 0, availableRoomsPatungan: 0, noWaOwner: "6281234567893",
-    description: "Kost sederhana di kawasan Helvetia.",
-    descriptionPatungan: "Tidak tersedia.",
-    fotoSolo: [],
-    fotoPatungan: [],
-  },
-];
+// Upload satu file, kembalikan URL
+async function uploadFile(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API}/api/upload`, { method: "POST", body: fd });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || "Upload gagal");
+  return data.url;
+}
 
-export default function UserDashboard({ currentUser, pendingInvites }) {
-  // ── Navigation ──────────────────────────────────────────────────────────────
+// ── Kategori badge ────────────────────────────────────────────────────────────
+const KATEGORI_COLOR = {
+  Putra: "bg-blue-100 text-blue-700 border-blue-200",
+  Putri: "bg-pink-100 text-pink-700 border-pink-200",
+  Campur: "bg-purple-100 text-purple-700 border-purple-200",
+};
+
+function KategoriBadge({ kategori }) {
+  if (!kategori) return null;
+  return (
+    <span
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${KATEGORI_COLOR[kategori] || "bg-neutral-100 text-neutral-500"}`}
+    >
+      {kategori === "Putra"
+        ? "🧑 Putra"
+        : kategori === "Putri"
+          ? "👩 Putri"
+          : "👫 Campur"}
+    </span>
+  );
+}
+
+// ── KostCard ──────────────────────────────────────────────────────────────────
+function KostCard({ kost, onSelect }) {
+  const tersedia = kost.status === "Tersedia";
+
+  // Ambil foto pertama dari fotoUrls (comma-separated hasil upload owner).
+  // Fallback ke kost.image (representatif dari sync), lalu placeholder.
+  const fotoSrc = (() => {
+    if (kost.fotoUrls) {
+      const first = kost.fotoUrls.split(",")[0].trim();
+      if (first)
+        return first.startsWith("http")
+          ? first
+          : `http://localhost:8080${first}`;
+    }
+    if (kost.image) {
+      return kost.image.startsWith("http")
+        ? kost.image
+        : `http://localhost:8080${kost.image}`;
+    }
+    return null; // tampilkan placeholder div
+  })();
+
+  return (
+    <div
+      className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition cursor-pointer group"
+      onClick={() => tersedia && onSelect(kost)}
+    >
+      {/* Foto */}
+      <div className="h-40 overflow-hidden relative bg-neutral-100">
+        {fotoSrc ? (
+          <img
+            src={fotoSrc}
+            alt={kost.namaKost}
+            className="w-full h-full object-cover group-hover:scale-105 transition"
+            onError={(e) => {
+              e.target.style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-4xl">🏠</span>
+          </div>
+        )}
+        <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
+          <KategoriBadge kategori={kost.kategori} />
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              tersedia
+                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                : "bg-neutral-200 text-neutral-500 border-neutral-300"
+            }`}
+          >
+            {tersedia ? "✓ Tersedia" : "✗ Tidak Tersedia"}
+          </span>
+        </div>
+      </div>
+      {/* Info */}
+      <div className="p-4 flex flex-col gap-2">
+        <h4 className="text-sm font-bold text-neutral-900 leading-snug">
+          {kost.namaKost}
+        </h4>
+        <p className="text-xs text-neutral-500 flex items-center gap-1">
+          <MapPin className="h-3 w-3" /> {kost.daerah}
+        </p>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-sm font-black text-emerald-700">
+            Rp {fmt(kost.hargaDasar)}
+            <span className="text-[10px] font-normal text-neutral-400">
+              /bln
+            </span>
+          </p>
+          {kost.rating > 0 && (
+            <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
+              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />{" "}
+              {kost.rating}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-3 text-[10px] text-neutral-500">
+          {kost.availableRoomsSolo > 0 && (
+            <span>👤 {kost.availableRoomsSolo} kamar solo</span>
+          )}
+          {kost.availableRoomsDuo > 0 && (
+            <span>👥 {kost.availableRoomsDuo} kamar duo</span>
+          )}
+        </div>
+        {!tersedia && (
+          <p className="text-[10px] text-neutral-400 italic">
+            Kamar penuh atau sedang maintenance
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── DetailKamar ───────────────────────────────────────────────────────────────
+function DetailKamar({
+  kost,
+  currentUser,
+  biodata,
+  onBack,
+  onPengajuanSubmit,
+}) {
+  const [tipeSewa, setTipeSewa] = useState("SOLO");
+  const [durasi, setDurasi] = useState(6);
+  const [roommateId, setRoommateId] = useState("");
+  const [roommateUser, setRoommateUser] = useState("");
+  const [sewaMsg, setSewaMsg] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const isDuo = tipeSewa === "DUO";
+  const harga = kost.hargaDasar || 0;
+  const totalTagihan = isDuo ? (harga / 2) * durasi : harga * durasi;
+  const available = isDuo
+    ? kost.availableRoomsDuo || 0
+    : kost.availableRoomsSolo || 0;
+
+  // ── Foto dari upload owner ──
+  // fotoUrls = comma-separated URL dari backend (e.g. "/uploads/a.jpg,/uploads/b.jpg")
+  const fotoList = (() => {
+    const raw = kost.fotoUrls || kost.image || "";
+    return raw
+      .split(",")
+      .map((u) => u.trim())
+      .filter(Boolean)
+      .map((u) => (u.startsWith("http") ? u : `http://localhost:8080${u}`));
+  })();
+  const [fotoIdx, setFotoIdx] = useState(0);
+  const displayImg = fotoList[fotoIdx] || null;
+
+  const handleSubmit = async () => {
+    if (!biodata?.isVerified) {
+      setSewaMsg({
+        type: "error",
+        text: "Data diri belum diverifikasi admin. Lengkapi Data Diri terlebih dahulu.",
+      });
+      setTimeout(() => setSewaMsg(null), 5000);
+      return;
+    }
+    if (available <= 0) {
+      setSewaMsg({
+        type: "error",
+        text: "Tidak ada kamar kosong untuk opsi ini.",
+      });
+      return;
+    }
+    if (isDuo && !roommateId.trim()) {
+      setSewaMsg({
+        type: "error",
+        text: "Masukkan ID roommate untuk sewa 2 orang.",
+      });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = {
+        userId: Number(currentUser.id),
+        kamarId: kost.id, // ini infoKostId
+        tipeSewa,
+        durasiBulan: durasi,
+        totalTagihan,
+        roommateId: isDuo ? Number(roommateId) : null,
+        roommateUsername: isDuo ? roommateUser : null,
+      };
+      const res = await fetch(`${API}/api/pengajuan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSewaMsg({
+          type: "success",
+          text: "Pengajuan berhasil! Tunggu konfirmasi dari owner.",
+        });
+        onPengajuanSubmit(data.data);
+      } else throw new Error(data.error);
+    } catch (err) {
+      setSewaMsg({
+        type: "error",
+        text: err.message || "Gagal mengirim pengajuan.",
+      });
+    } finally {
+      setSubmitting(false);
+      setTimeout(() => setSewaMsg(null), 5000);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="flex flex-col gap-5"
+    >
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-xs font-bold text-neutral-500 hover:text-emerald-700 transition w-fit"
+      >
+        ← Kembali ke daftar kost
+      </button>
+
+      {/* Foto & info header */}
+      <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+        {/* Foto utama */}
+        <div className="h-56 overflow-hidden relative bg-neutral-100">
+          {displayImg ? (
+            <img
+              src={displayImg}
+              alt={kost.namaKost}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-5xl">🏠</span>
+            </div>
+          )}
+          {/* Panah navigasi foto */}
+          {fotoList.length > 1 && (
+            <div className="absolute bottom-2 right-2 flex gap-1">
+              {fotoList.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setFotoIdx(i)}
+                  className={`w-2 h-2 rounded-full transition ${i === fotoIdx ? "bg-white" : "bg-white/50"}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Thumbnail strip jika ada > 1 foto */}
+        {fotoList.length > 1 && (
+          <div className="flex gap-2 p-3 bg-neutral-50 border-b border-neutral-100">
+            {fotoList.map((url, i) => (
+              <button
+                key={i}
+                onClick={() => setFotoIdx(i)}
+                className={`w-16 h-12 rounded-lg overflow-hidden border-2 transition ${i === fotoIdx ? "border-emerald-600" : "border-neutral-200 hover:border-neutral-300"}`}
+              >
+                <img
+                  src={url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="p-5 flex flex-col gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-neutral-900">
+                {kost.namaKost}
+              </h2>
+              <p className="text-xs text-neutral-500 flex items-center gap-1 mt-0.5">
+                <MapPin className="h-3 w-3" /> {kost.daerah}
+                {kost.alamatLengkap && ` — ${kost.alamatLengkap}`}
+              </p>
+            </div>
+            <KategoriBadge kategori={kost.kategori} />
+          </div>
+          {kost.description && (
+            <p className="text-xs text-neutral-600 leading-relaxed">
+              {kost.description}
+            </p>
+          )}
+          {/* Fasilitas */}
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {kost.wifiCepat && (
+              <span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded-full">
+                📶 WiFi
+              </span>
+            )}
+            {kost.ac && (
+              <span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded-full">
+                ❄️ AC
+              </span>
+            )}
+            {kost.parkir && (
+              <span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded-full">
+                🏍️ Parkir
+              </span>
+            )}
+            {kost.laundry && (
+              <span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded-full">
+                👕 Laundry
+              </span>
+            )}
+            {kost.dapur && (
+              <span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded-full">
+                🍳 Dapur
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Toggle SOLO / DUO */}
+      <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-4">
+        <h3 className="text-sm font-bold text-neutral-800">Opsi Sewa</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            {
+              key: "SOLO",
+              label: "Sewa Sendiri",
+              sub: "1 orang",
+              avail: kost.availableRoomsSolo || 0,
+              icon: "👤",
+            },
+            {
+              key: "DUO",
+              label: "Sewa 2 Orang",
+              sub: "bagi 2",
+              avail: kost.availableRoomsDuo || 0,
+              icon: "👥",
+            },
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => {
+                setTipeSewa(opt.key);
+                setRoommateId("");
+              }}
+              className={`p-4 rounded-xl border-2 text-left transition ${
+                tipeSewa === opt.key
+                  ? "border-emerald-600 bg-emerald-50"
+                  : "border-neutral-200 hover:border-neutral-300"
+              }`}
+            >
+              <p className="text-lg mb-1">{opt.icon}</p>
+              <p className="text-xs font-black text-neutral-800">{opt.label}</p>
+              <p className="text-[10px] text-neutral-500">{opt.sub}</p>
+              <p
+                className={`text-[10px] font-bold mt-1.5 ${opt.avail > 0 ? "text-emerald-600" : "text-red-500"}`}
+              >
+                {opt.avail > 0
+                  ? `${opt.avail} kamar tersedia`
+                  : "Tidak tersedia"}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* Roommate input untuk DUO */}
+        <AnimatePresence>
+          {isDuo && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <label className="block text-xs font-bold text-neutral-600 mb-1">
+                <Users className="h-3 w-3 inline mr-1" />
+                ID User Roommate
+              </label>
+              <input
+                type="number"
+                placeholder="Masukkan ID user yang akan jadi roommate"
+                value={roommateId}
+                onChange={(e) => setRoommateId(e.target.value)}
+                className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              />
+              <p className="text-[10px] text-neutral-400 mt-1">
+                ID user bisa dilihat di profil masing-masing.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Durasi */}
+        <div>
+          <label className="block text-xs font-bold text-neutral-600 mb-2">
+            Durasi Sewa
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {[1, 3, 6, 12].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDurasi(d)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition ${
+                  durasi === d
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-neutral-200 text-neutral-500 hover:border-neutral-300"
+                }`}
+              >
+                {d} {d === 1 ? "Bulan" : "Bulan"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Kalkulasi */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+          <p className="text-xs text-emerald-700 font-bold mb-1">
+            Estimasi Tagihan
+          </p>
+          <p className="text-2xl font-black text-emerald-800">
+            Rp {fmt(totalTagihan)}
+          </p>
+          <p className="text-[10px] text-emerald-600 mt-0.5">
+            {isDuo
+              ? `(Rp ${fmt(harga)} ÷ 2) × ${durasi} bulan`
+              : `Rp ${fmt(harga)} × ${durasi} bulan`}
+          </p>
+          {isDuo && (
+            <p className="text-[10px] text-emerald-600">
+              Per orang: Rp {fmt(totalTagihan / 2)} / bulan
+            </p>
+          )}
+        </div>
+
+        {/* Pesan status */}
+        {sewaMsg && (
+          <div
+            className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+              sewaMsg.type === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+            }`}
+          >
+            {sewaMsg.type === "error" ? (
+              <XCircle className="h-4 w-4 shrink-0" />
+            ) : (
+              <CheckCircle className="h-4 w-4 shrink-0" />
+            )}
+            {sewaMsg.text}
+          </div>
+        )}
+
+        {/* Tombol aksi */}
+        <div className="flex flex-col gap-2">
+          {/* Tanya Pemilik — WhatsApp */}
+          {kost.nomorWhatsApp && (
+            <button
+              type="button"
+              onClick={() =>
+                window.open(
+                  `https://wa.me/${kost.nomorWhatsApp}?text=Halo%2C%20saya%20tertarik%20dengan%20${encodeURIComponent(kost.namaKost)}`,
+                  "_blank",
+                )
+              }
+              className="w-full py-3 bg-[#25D366] hover:bg-[#1fad54] text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Tanya Pemilik via WhatsApp
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || available <= 0}
+            className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send className="h-4 w-4" />
+            {submitting
+              ? "Mengirim..."
+              : available <= 0
+                ? "Kamar Penuh"
+                : "Ajukan Sewa"}
+          </button>
+          {!biodata?.isVerified && (
+            <p className="text-[10px] text-red-600 text-center flex items-center justify-center gap-1">
+              <AlertCircle className="h-3 w-3" /> Anda perlu verifikasi data
+              diri sebelum bisa menyewa.
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main UserDashboard ────────────────────────────────────────────────────────
+export default function UserDashboard({ currentUser }) {
   const [userPage, setUserPage] = useState("beranda");
-  const [kamarSayaTab, setKamarSayaTab] = useState("laporan");
-
-  // ── Kost ────────────────────────────────────────────────────────────────────
-  const [activeKamarList, setActiveKamarList] = useState(INITIAL_KAMAR_KOST);
   const [selectedKamar, setSelectedKamar] = useState(null);
-  const [filterLokasi, setFilterLokasi] = useState("Semua");
-  const [filterKategori, setFilterKategori] = useState("Semua");
+  const [previewUrl, setPreviewUrl] = useState(null);
 
-  // ── Biodata ─────────────────────────────────────────────────────────────────
+  // Kost list & filter
+  const [kostList, setKostList] = useState([]);
+  const [filterKategori, setFilterKategori] = useState("Semua");
+  const [filterLokasi, setFilterLokasi] = useState("Semua");
+  const [searchQ, setSearchQ] = useState("");
+
+  // Biodata
   const [biodata, setBiodata] = useState(null);
   const [biodataForm, setBiodataForm] = useState({
-    namaLengkap: "", tanggalLahir: "", tempatLahir: "", jenisKelamin: "",
-    noHp: "", alamat: "", pekerjaan: "", ktpUrl: "", kkUrl: "", fotoUrl: ""
+    namaLengkap: "",
+    tanggalLahir: "",
+    tempatLahir: "",
+    jenisKelamin: "",
+    noHp: "",
+    alamat: "",
+    pekerjaan: "",
+    ktpUrl: "",
+    kkUrl: "",
+    fotoUrl: "",
+  });
+  const [biodataFiles, setBiodataFiles] = useState({
+    ktpUrl: null,
+    kkUrl: null,
+    fotoUrl: null,
   });
   const [biodataSaving, setBiodataSaving] = useState(false);
   const [biodataMsg, setBiodataMsg] = useState(null);
-  const [biodataFiles, setBiodataFiles] = useState({ ktpUrl: null, kkUrl: null, fotoUrl: null });
 
-  // ── Laporan ─────────────────────────────────────────────────────────────────
+  // Kamar saya (dari pengajuan yg DITERIMA)
+  const [kamarSaya, setKamarSaya] = useState(null); // PengajuanSewa yg DITERIMA
+  const [unitSaya, setUnitSaya] = useState(null); // UnitKamar detail
+  const [kamarTab, setKamarTab] = useState("info");
+
+  // Laporan
   const [laporanList, setLaporanList] = useState([]);
-  const [newKategori, setNewKategori] = useState("");
-  const [newKendala, setNewKendala] = useState("");
-  const [newDetail, setNewDetail] = useState("");
-  const [notifReport, setNotifReport] = useState(null);
+  const [laporanForm, setLaporanForm] = useState({
+    kategori: "",
+    kendala: "",
+    detail: "",
+  });
+  const [laporanMsg, setLaporanMsg] = useState(null);
 
-  // ── Invite patungan ─────────────────────────────────────────────────────────
-  const [inviteList, setInviteList] = useState([]);
-  const [inviteTargetId, setInviteTargetId] = useState("");
-  const [inviteMsg, setInviteMsg] = useState(null);
-  const [showInviteForm, setShowInviteForm] = useState(false);
-
-  // ── Sewa ────────────────────────────────────────────────────────────────────
-  const [calcTipe, setCalcTipe] = useState("solo");
-  const [calcDurasi, setCalcDurasi] = useState(6);
-  const [apiResult, setApiResult] = useState(null);
-  const [showSewaForm, setShowSewaForm] = useState(false);
-  const [sewaMsg, setSewaMsg] = useState(null);
+  // Notifikasi (pengajuan sewa + invite)
   const [pengajuanList, setPengajuanList] = useState([]);
+  const [inviteList, setInviteList] = useState([]);
 
-  // ── Notifikasi pengajuan sewa ────────────────────────────────────────────────
-  const [pengajuanSewaList, setPengajuanSewaList] = useState([]);
-
-  // ── Image preview ────────────────────────────────────────────────────────────
-  const [previewUrl, setPreviewUrl] = useState(null);
-
-  // ── Fetch data ───────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!currentUser) return;
-    // Fetch biodata
-    fetch(`/api/biodata/${currentUser.id}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) {
-          setBiodata(data);
-          setBiodataForm({
-            namaLengkap: data.namaLengkap || "", tanggalLahir: data.tanggalLahir || "",
-            tempatLahir: data.tempatLahir || "", jenisKelamin: data.jenisKelamin || "",
-            noHp: data.noHp || "", alamat: data.alamat || "", pekerjaan: data.pekerjaan || "",
-            ktpUrl: data.ktpUrl || "", kkUrl: data.kkUrl || "", fotoUrl: data.fotoUrl || ""
-          });
+  // ── Fetch ──
+  const loadAll = useCallback(async () => {
+    if (!currentUser?.id) return;
+    const uid = currentUser.id;
+    try {
+      // Biodata
+      const bRes = await fetch(`${API}/api/biodata/${uid}`);
+      if (bRes.ok) {
+        const bd = await bRes.json();
+        setBiodata(bd);
+        setBiodataForm({
+          namaLengkap: bd.namaLengkap || "",
+          tanggalLahir: bd.tanggalLahir || "",
+          tempatLahir: bd.tempatLahir || "",
+          jenisKelamin: bd.jenisKelamin || "",
+          noHp: bd.noHp || "",
+          alamat: bd.alamat || "",
+          pekerjaan: bd.pekerjaan || "",
+          ktpUrl: bd.ktpUrl || "",
+          kkUrl: bd.kkUrl || "",
+          fotoUrl: bd.fotoUrl || "",
+        });
+      }
+      // Kost list
+      const kRes = await fetch(`${API}/api/kost/medan`);
+      if (kRes.ok) setKostList(await kRes.json());
+      // Pengajuan user
+      const pRes = await fetch(`${API}/api/pengajuan/${uid}`);
+      if (pRes.ok) {
+        const list = await pRes.json();
+        setPengajuanList(list);
+        // Cari yang DITERIMA
+        const diterima = list.find((p) => p.status === "DITERIMA");
+        if (diterima) {
+          setKamarSaya(diterima);
+          if (diterima.unitKamarId) {
+            const uRes = await fetch(
+              `${API}/api/owner/unit-kamar/single/${diterima.unitKamarId}`,
+            ).catch(() => null);
+            // endpoint single belum ada — simpan apa adanya
+          }
         }
-      }).catch(() => {});
-
-    // Fetch invites
-    fetch(`/api/invite/${currentUser.id}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(setInviteList).catch(() => {});
-
-    // Fetch laporan
-    fetch(`/api/laporan?userId=${currentUser.id}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(setLaporanList).catch(() => {});
-
-    // Fetch pengajuan sewa user
-    fetch(`/api/pengajuan/${currentUser.id}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(setPengajuanSewaList).catch(() => {});
-
-    // Fetch kost list
-    fetch("/api/kost/medan")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setActiveKamarList(data); })
-      .catch(() => {});
+      }
+      // Invite
+      const iRes = await fetch(`${API}/api/invite/${uid}`);
+      if (iRes.ok) setInviteList(await iRes.json());
+      // Laporan
+      const lRes = await fetch(`${API}/api/laporan?userId=${uid}`);
+      if (lRes.ok) setLaporanList(await lRes.json());
+    } catch {
+      /* offline fallback – tampil UI kosong */
+    }
   }, [currentUser]);
 
-  // ── Kalkulasi harga ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!selectedKamar) return;
-    const harga = selectedKamar.hargaDasar;
-    const total = calcTipe === "solo" ? harga * calcDurasi : (harga / 2) * calcDurasi;
-    setApiResult({
-      totalTagihanHasil: total,
-      formulaPBO: calcTipe === "solo"
-        ? `Total = Rp ${fmt(harga)} × ${calcDurasi} bln`
-        : `Total = (Rp ${fmt(harga)} ÷ 2) × ${calcDurasi} bln`,
-    });
-  }, [calcTipe, calcDurasi, selectedKamar]);
+    loadAll();
+  }, [loadAll]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-  const handleFileChange = (e, key) => {
+  // ── Handlers ──
+  const handleFileUpload = async (e, key) => {
     const file = e.target.files[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setBiodataFiles(prev => ({ ...prev, [key]: { name: file.name, url } }));
-    setBiodataForm(prev => ({ ...prev, [key]: file.name }));
+    // Preview lokal dulu
+    const localUrl = URL.createObjectURL(file);
+    setBiodataFiles((prev) => ({
+      ...prev,
+      [key]: { file, localUrl, name: file.name },
+    }));
+    setBiodataForm((prev) => ({ ...prev, [key]: localUrl })); // placeholder sementara
   };
 
   const handleSaveBiodata = async (e) => {
     e.preventDefault();
     setBiodataSaving(true);
     try {
-      const r = await fetch(`/api/biodata/${currentUser.id}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(biodataForm)
+      // Upload berkas yang baru dipilih
+      const uploads = {};
+      for (const key of ["ktpUrl", "kkUrl", "fotoUrl"]) {
+        if (biodataFiles[key]?.file) {
+          uploads[key] = await uploadFile(biodataFiles[key].file);
+        } else {
+          uploads[key] = biodata?.[key] || "";
+        }
+      }
+      const payload = { ...biodataForm, ...uploads };
+      const res = await fetch(`${API}/api/biodata/${currentUser.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (r.ok) {
-        const data = await r.json();
+      const data = await res.json();
+      if (data.biodata) {
         setBiodata(data.biodata);
-        setBiodataMsg({ type: "success", text: "Data diri berhasil disimpan! Menunggu verifikasi admin." });
-      } else { throw new Error(); }
-    } catch {
-      setBiodataMsg({ type: "error", text: "Gagal menyimpan, coba lagi." });
+        setBiodataMsg({
+          type: "success",
+          text: "Data diri berhasil disimpan! Menunggu verifikasi admin.",
+        });
+      } else throw new Error(data.error);
+    } catch (err) {
+      setBiodataMsg({ type: "error", text: err.message || "Gagal menyimpan." });
     } finally {
       setBiodataSaving(false);
-      setTimeout(() => setBiodataMsg(null), 4000);
+      setTimeout(() => setBiodataMsg(null), 5000);
     }
   };
 
-  const handleAddReport = async (e) => {
+  const handleLaporan = async (e) => {
     e.preventDefault();
-    if (!newKategori || !newKendala) return;
-    const newRep = {
-      id: `REP-${Date.now()}`, userId: currentUser.id,
-      tanggal: new Date().toLocaleDateString("id-ID"),
-      kategori: newKategori === "pipa" ? "Pipa Air" : newKategori === "listrik" ? "Listrik" : newKategori === "perabot" ? "Peralatan" : "Lainnya",
-      kendala: newKendala, status: "BARU", detail: newDetail || "-"
-    };
+    if (!laporanForm.kategori || !laporanForm.kendala) return;
     try {
-      const r = await fetch("/api/laporan", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kategori: newRep.kategori, kendala: newKendala, detail: newDetail, userId: currentUser.id }),
+      const payload = {
+        userId: Number(currentUser.id),
+        unitKamarId: kamarSaya?.unitKamarId || null,
+        ...laporanForm,
+      };
+      const res = await fetch(`${API}/api/laporan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (r.ok) { const d = await r.json(); setLaporanList(prev => [d, ...prev]); }
-      else setLaporanList(prev => [newRep, ...prev]);
-    } catch { setLaporanList(prev => [newRep, ...prev]); }
-    setNewKategori(""); setNewKendala(""); setNewDetail("");
-    setNotifReport("Laporan berhasil dikirim!");
-    setTimeout(() => setNotifReport(null), 4000);
-  };
-
-  const handleSendInvite = async (e) => {
-    e.preventDefault();
-    if (!inviteTargetId || !selectedKamar) return;
-    try {
-      const r = await fetch("/api/invite", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromUserId: currentUser.id, fromUserName: currentUser.name,
-          toUserId: inviteTargetId, kamarId: selectedKamar.id,
-          namaKost: selectedKamar.namaKost, hargaDasar: selectedKamar.hargaDasar,
-          jumlahOrang: 2, durasi: calcDurasi
-        })
-      });
-      const data = await r.json();
-      if (r.ok) {
-        setInviteMsg({ type: "success", text: "Undangan berhasil dikirim!" });
-        setInviteTargetId(""); setShowInviteForm(false);
-        setInviteList(prev => [...prev, data.data || data]);
-      } else setInviteMsg({ type: "error", text: data.error || "Gagal mengirim." });
-    } catch { setInviteMsg({ type: "error", text: "Gagal tersambung ke server." }); }
-    setTimeout(() => setInviteMsg(null), 4000);
+      const data = await res.json();
+      setLaporanList((prev) => [data, ...prev]);
+      setLaporanForm({ kategori: "", kendala: "", detail: "" });
+      setLaporanMsg("Laporan berhasil dikirim!");
+      setTimeout(() => setLaporanMsg(null), 4000);
+    } catch {
+      setLaporanMsg("Gagal mengirim laporan.");
+    }
   };
 
   const handleRespondInvite = async (id, status) => {
     try {
-      await fetch(`/api/invite/${id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status })
+      await fetch(`${API}/api/invite/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
       });
-    } catch { /* offline */ }
-    setInviteList(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+      setInviteList((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, status } : i)),
+      );
+    } catch {
+      /* offline */
+    }
   };
 
-  const handleSubmitSewa = async () => {
-    if (!biodata?.isVerified) {
-      setSewaMsg({ type: "error", text: "Data diri Anda belum diverifikasi admin." });
-      setTimeout(() => setSewaMsg(null), 5000);
-      return;
-    }
-    try {
-      const r = await fetch("/api/pengajuan", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: Number(currentUser.id), kamarId: selectedKamar.id,
-          tipeSewa: calcTipe, durasiBulan: calcDurasi,
-          totalTagihan: apiResult?.totalTagihanHasil,
-        })
-      });
-      if (r.ok) {
-        const data = await r.json();
-        setPengajuanSewaList(prev => [...prev, data.data || data]);
-        setSewaMsg({ type: "success", text: "Pengajuan berhasil dikirim! Tunggu konfirmasi owner." });
-        setShowSewaForm(false);
-      }
-    } catch { setSewaMsg({ type: "error", text: "Gagal mengirim pengajuan." }); }
-    setTimeout(() => setSewaMsg(null), 5000);
+  const handlePengajuanSubmit = (newPengajuan) => {
+    setPengajuanList((prev) => [newPengajuan, ...prev]);
   };
 
   // Derived
-  const pendingInviteCount = inviteList.filter(i => i.toUserId === currentUser?.id && i.status === "PENDING").length;
-  const pendingSewaCount = pengajuanSewaList.filter(p => p.status === "PENDING" || p.status === "MENUNGGU").length;
-  const totalNotif = pendingInviteCount + pendingSewaCount;
+  const pendingInvite = inviteList.filter(
+    (i) =>
+      String(i.toUserId) === String(currentUser?.id) && i.status === "PENDING",
+  ).length;
+  const pendingPengajuan = pengajuanList.filter(
+    (p) => p.status === "PENDING",
+  ).length;
+  const totalNotif = pendingInvite + pendingPengajuan;
 
-  const filteredKamar = INITIAL_KAMAR_KOST.filter(k => {
+  const lokasiOptions = [
+    "Semua",
+    ...new Set(kostList.map((k) => k.daerah).filter(Boolean)),
+  ];
+
+  const filteredKost = kostList.filter((k) => {
+    if (filterKategori !== "Semua" && k.kategori !== filterKategori)
+      return false;
     if (filterLokasi !== "Semua" && k.daerah !== filterLokasi) return false;
-    if (filterKategori !== "Semua" && k.kategori !== filterKategori) return false;
+    if (
+      searchQ &&
+      !k.namaKost?.toLowerCase().includes(searchQ.toLowerCase()) &&
+      !k.daerah?.toLowerCase().includes(searchQ.toLowerCase())
+    )
+      return false;
     return true;
   });
 
-  // Current kamar image based on tipe
-  const currentImage = selectedKamar
-    ? (calcTipe === "patungan" && selectedKamar.fotoPatungan?.length
-        ? selectedKamar.fotoPatungan[0]
-        : selectedKamar.fotoSolo?.[0] || selectedKamar.image)
-    : null;
-
-  const currentDesc = selectedKamar
-    ? (calcTipe === "patungan" ? selectedKamar.descriptionPatungan : selectedKamar.description)
-    : null;
-
-  const currentAvailable = selectedKamar
-    ? (calcTipe === "solo" ? selectedKamar.availableRoomsSolo : selectedKamar.availableRoomsPatungan)
-    : 0;
-
   return (
     <div className="flex-1 flex flex-col lg:flex-row relative">
-      {/* ── SIDEBAR ─────────────────────────────────────────────────── */}
-      <aside className="w-full lg:w-64 bg-white border-r border-neutral-200 p-5 flex flex-col gap-4 shrink-0 lg:sticky lg:top-0 h-auto lg:h-[calc(100vh-68px)]">
-        {/* Profile */}
-        <div className="hidden lg:flex flex-col gap-2 px-1 pb-3 border-b border-neutral-100">
+      {/* ── Sidebar ── */}
+      <aside className="w-full lg:w-64 bg-white border-r border-neutral-200 p-5 flex flex-col gap-4 shrink-0 lg:sticky lg:top-0 lg:h-[calc(100vh-68px)]">
+        <div className="hidden lg:flex flex-col gap-2 pb-3 border-b border-neutral-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
-              {currentUser.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-black text-sm">
+              {currentUser.name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()}
             </div>
             <div>
-              <h4 className="text-sm font-bold text-neutral-800">{currentUser.name}</h4>
-              <p className="text-[9px] text-neutral-400 font-mono">ID: {currentUser.id}</p>
+              <h4 className="text-sm font-bold text-neutral-800">
+                {currentUser.name}
+              </h4>
+              <p className="text-[9px] text-neutral-400 font-mono">
+                ID: {currentUser.id}
+              </p>
             </div>
           </div>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full self-start ${
-            biodata?.verifikasiStatus === "DISETUJUI" ? "bg-emerald-100 text-emerald-700" :
-            biodata?.verifikasiStatus === "PENDING" ? "bg-amber-100 text-amber-700" :
-            "bg-neutral-100 text-neutral-500"
-          }`}>
-            {biodata?.verifikasiStatus === "DISETUJUI" ? "✓ Terverifikasi" :
-             biodata?.verifikasiStatus === "PENDING" ? "⏳ Menunggu Verifikasi" : "⚠ Belum Lengkap"}
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full self-start ${
+              biodata?.verifikasiStatus === "DISETUJUI"
+                ? "bg-emerald-100 text-emerald-700"
+                : biodata?.verifikasiStatus === "PENDING"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-neutral-100 text-neutral-500"
+            }`}
+          >
+            {biodata?.verifikasiStatus === "DISETUJUI"
+              ? "✓ Terverifikasi"
+              : biodata?.verifikasiStatus === "PENDING"
+                ? "⏳ Menunggu Verifikasi"
+                : "⚠ Belum Lengkap"}
           </span>
         </div>
-
-        {/* Nav */}
-        <nav className="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible">
+        <nav className="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
           {[
-            { key: "beranda", icon: <Home className="h-4 w-4" />, label: "Cari Kost" },
-            { key: "biodata", icon: <User className="h-4 w-4" />, label: "Data Diri" },
-            { key: "kamar-saya", icon: <DoorOpen className="h-4 w-4" />, label: "Kamar Saya", hidden: !currentUser.hasKamar },
-            { key: "notifikasi", icon: <BellIcon className="h-4 w-4" />, label: "Notifikasi", badge: totalNotif },
-          ].filter(i => !i.hidden).map(item => (
-            <button key={item.key}
-              onClick={() => { setUserPage(item.key); setSelectedKamar(null); }}
-              className={`flex items-center gap-3 px-4 py-2.5 text-xs font-bold rounded-lg transition-all shrink-0 ${userPage === item.key ? "bg-emerald-50 text-emerald-800" : "text-neutral-600 hover:bg-neutral-50"}`}>
+            {
+              key: "beranda",
+              icon: <Home className="h-4 w-4" />,
+              label: "Cari Kost",
+            },
+            {
+              key: "biodata",
+              icon: <User className="h-4 w-4" />,
+              label: "Data Diri",
+            },
+            {
+              key: "kamar-saya",
+              icon: <DoorOpen className="h-4 w-4" />,
+              label: "Kamar Saya",
+            },
+            {
+              key: "notifikasi",
+              icon: <BellIcon className="h-4 w-4" />,
+              label: "Notifikasi",
+              badge: totalNotif,
+            },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => {
+                setUserPage(item.key);
+                setSelectedKamar(null);
+              }}
+              className={`flex items-center gap-3 px-4 py-2.5 text-xs font-bold rounded-lg transition-all shrink-0 ${
+                userPage === item.key
+                  ? "bg-emerald-50 text-emerald-800"
+                  : "text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
               {item.icon} {item.label}
               {item.badge > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.badge}</span>
+                <span className="ml-auto bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {item.badge}
+                </span>
               )}
             </button>
           ))}
         </nav>
       </aside>
 
-      {/* ── MAIN CONTENT ─────────────────────────────────────────────── */}
+      {/* ── Main ── */}
       <main className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full">
         <AnimatePresence mode="wait">
-
-          {/* ── BIODATA ── */}
-          {userPage === "biodata" && (
-            <motion.div key="biodata" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-col gap-6">
+          {/* ════ BERANDA / CARI KOST ════ */}
+          {userPage === "beranda" && !selectedKamar && (
+            <motion.div
+              key="beranda"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col gap-5"
+            >
               <div>
-                <h2 className="text-xl font-bold text-neutral-900">Data Diri</h2>
-                <p className="text-xs text-neutral-500 mt-1">Lengkapi data diri. Setelah disimpan, admin akan memverifikasi sebelum kamu bisa menyewa.</p>
+                <h2 className="text-xl font-bold text-neutral-900">
+                  Cari Kost
+                </h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Temukan kamar kost terbaik di Medan.
+                </p>
+              </div>
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama kost atau daerah..."
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+              {/* Filter chips */}
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Kategori:
+                  </span>
+                  {["Semua", "Putra", "Putri", "Campur"].map((k) => (
+                    <button
+                      key={k}
+                      onClick={() => setFilterKategori(k)}
+                      className={`text-xs font-bold px-3 py-1 rounded-full border transition ${filterKategori === k ? "bg-emerald-700 text-white border-emerald-700" : "bg-white border-neutral-200 text-neutral-600 hover:border-emerald-400"}`}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Lokasi:
+                  </span>
+                  {lokasiOptions.slice(0, 6).map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => setFilterLokasi(l)}
+                      className={`text-xs font-bold px-3 py-1 rounded-full border transition ${filterLokasi === l ? "bg-emerald-700 text-white border-emerald-700" : "bg-white border-neutral-200 text-neutral-600 hover:border-emerald-400"}`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Kost grid */}
+              {filteredKost.length === 0 ? (
+                <div className="bg-white border border-neutral-200 rounded-2xl p-12 text-center">
+                  <Package className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-neutral-500">
+                    Tidak ada kost yang ditemukan
+                  </p>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Coba ubah filter atau kata kunci pencarian.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                  {filteredKost.map((k) => (
+                    <KostCard key={k.id} kost={k} onSelect={setSelectedKamar} />
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ════ DETAIL KAMAR ════ */}
+          {userPage === "beranda" && selectedKamar && (
+            <DetailKamar
+              key="detail"
+              kost={selectedKamar}
+              currentUser={currentUser}
+              biodata={biodata}
+              onBack={() => setSelectedKamar(null)}
+              onPengajuanSubmit={handlePengajuanSubmit}
+            />
+          )}
+
+          {/* ════ DATA DIRI ════ */}
+          {userPage === "biodata" && (
+            <motion.div
+              key="biodata"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col gap-6"
+            >
+              <div>
+                <h2 className="text-xl font-bold text-neutral-900">
+                  Data Diri
+                </h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Lengkapi dan upload berkas. Admin akan memverifikasi sebelum
+                  Anda bisa menyewa.
+                </p>
               </div>
 
               {/* Status banner */}
               {biodata?.verifikasiStatus === "DISETUJUI" && (
-                <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex gap-3 items-center">
-                  <CheckCircle className="h-6 w-6 text-emerald-600 shrink-0" />
-                  <div><p className="text-sm font-bold text-emerald-800">Data Diri Terverifikasi ✓</p>
-                  <p className="text-xs text-emerald-700 mt-0.5">Kamu sudah bisa menyewa kamar kost.</p></div>
+                <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex gap-3 items-start">
+                  <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-emerald-800">
+                      Data Diri Terverifikasi ✓
+                    </p>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      Anda sudah bisa menyewa kamar.
+                    </p>
+                  </div>
                 </div>
               )}
               {biodata?.verifikasiStatus === "PENDING" && (
-                <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-center">
-                  <Clock className="h-6 w-6 text-amber-600 shrink-0" />
-                  <div><p className="text-sm font-bold text-amber-800">Menunggu Verifikasi Admin</p>
-                  <p className="text-xs text-amber-700 mt-0.5">Data sedang ditinjau. Kamu bisa menyewa setelah disetujui.</p></div>
+                <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-start">
+                  <Clock className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-800">
+                      Menunggu Verifikasi Admin
+                    </p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Data sedang ditinjau. Anda bisa menyewa setelah disetujui.
+                    </p>
+                  </div>
                 </div>
               )}
               {biodata?.verifikasiStatus === "DITOLAK" && (
-                <div className="p-4 bg-red-50 border border-red-300 rounded-xl flex gap-3 items-center">
-                  <XCircle className="h-6 w-6 text-red-600 shrink-0" />
-                  <div><p className="text-sm font-bold text-red-800">Verifikasi Ditolak</p>
-                  <p className="text-xs text-red-700 mt-0.5">Perbaiki data dan kirim ulang.</p>
-                  {biodata?.komentarAdmin && <p className="text-xs text-red-700 mt-1 font-bold">💬 Admin: {biodata.komentarAdmin}</p>}</div>
+                <div className="p-4 bg-red-50 border border-red-300 rounded-xl flex gap-3 items-start">
+                  <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800">
+                      Verifikasi Ditolak
+                    </p>
+                    <p className="text-xs text-red-700 mt-0.5">
+                      Perbaiki berkas yang ditolak lalu kirim ulang.
+                    </p>
+                    {/* Komentar per berkas */}
+                    <div className="mt-2 flex flex-col gap-1">
+                      {[
+                        ["KTP", biodata.ktpStatus, biodata.ktpKomentar],
+                        ["KK", biodata.kkStatus, biodata.kkKomentar],
+                        ["Foto", biodata.fotoStatus, biodata.fotoKomentar],
+                      ]
+                        .filter(([, s, k]) => s === "DITOLAK" && k)
+                        .map(([label, , komentar]) => (
+                          <p
+                            key={label}
+                            className="text-xs text-red-700 bg-red-100 px-2 py-1 rounded"
+                          >
+                            <strong>{label}:</strong> {komentar}
+                          </p>
+                        ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
               {biodataMsg && (
-                <div className={`p-3 rounded-xl text-xs font-medium border ${biodataMsg.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold ${biodataMsg.type === "success" ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}
+                >
                   {biodataMsg.text}
                 </div>
               )}
 
-              <form onSubmit={handleSaveBiodata} className="bg-white border border-neutral-200 rounded-2xl p-6 flex flex-col gap-5">
-                <h3 className="text-sm font-bold text-neutral-800 border-b border-neutral-100 pb-3">Informasi Pribadi</h3>
+              <form
+                onSubmit={handleSaveBiodata}
+                className="bg-white border border-neutral-200 rounded-2xl p-6 flex flex-col gap-5"
+              >
+                <h3 className="text-sm font-bold text-neutral-800 border-b border-neutral-100 pb-3">
+                  Informasi Pribadi
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { label: "Nama Lengkap", key: "namaLengkap", type: "text", placeholder: "Nama sesuai KTP" },
-                    { label: "Tempat Lahir", key: "tempatLahir", type: "text", placeholder: "Kota kelahiran" },
-                    { label: "Tanggal Lahir", key: "tanggalLahir", type: "date" },
-                    { label: "No. HP / WhatsApp", key: "noHp", type: "tel", placeholder: "08xxxxxxxxxx" },
-                    { label: "Pekerjaan", key: "pekerjaan", type: "text", placeholder: "Mahasiswa / Karyawan / dll" },
-                  ].map(f => (
+                    {
+                      label: "Nama Lengkap",
+                      key: "namaLengkap",
+                      type: "text",
+                      placeholder: "Sesuai KTP",
+                    },
+                    {
+                      label: "Tempat Lahir",
+                      key: "tempatLahir",
+                      type: "text",
+                      placeholder: "Kota kelahiran",
+                    },
+                    {
+                      label: "Tanggal Lahir",
+                      key: "tanggalLahir",
+                      type: "date",
+                    },
+                    {
+                      label: "No. HP / WhatsApp",
+                      key: "noHp",
+                      type: "tel",
+                      placeholder: "08xxxxxxxxxx",
+                    },
+                    {
+                      label: "Pekerjaan",
+                      key: "pekerjaan",
+                      type: "text",
+                      placeholder: "Mahasiswa / Karyawan",
+                    },
+                  ].map((f) => (
                     <div key={f.key}>
-                      <label className="block text-xs font-bold text-neutral-600 mb-1">{f.label}</label>
-                      <input type={f.type} placeholder={f.placeholder || ""} value={biodataForm[f.key]}
-                        onChange={e => setBiodataForm(p => ({ ...p, [f.key]: e.target.value }))}
-                        className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition" required />
+                      <label className="block text-xs font-bold text-neutral-600 mb-1">
+                        {f.label}
+                      </label>
+                      <input
+                        type={f.type}
+                        placeholder={f.placeholder || ""}
+                        required
+                        value={biodataForm[f.key]}
+                        onChange={(e) =>
+                          setBiodataForm((p) => ({
+                            ...p,
+                            [f.key]: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
                     </div>
                   ))}
                   <div>
-                    <label className="block text-xs font-bold text-neutral-600 mb-1">Jenis Kelamin</label>
-                    <select value={biodataForm.jenisKelamin} onChange={e => setBiodataForm(p => ({ ...p, jenisKelamin: e.target.value }))}
-                      className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition" required>
+                    <label className="block text-xs font-bold text-neutral-600 mb-1">
+                      Jenis Kelamin
+                    </label>
+                    <select
+                      required
+                      value={biodataForm.jenisKelamin}
+                      onChange={(e) =>
+                        setBiodataForm((p) => ({
+                          ...p,
+                          jenisKelamin: e.target.value,
+                        }))
+                      }
+                      className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    >
                       <option value="">Pilih...</option>
-                      <option value="Laki-laki">Laki-laki</option>
-                      <option value="Perempuan">Perempuan</option>
+                      <option>Laki-laki</option>
+                      <option>Perempuan</option>
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-neutral-600 mb-1">Alamat Lengkap</label>
-                  <textarea rows={2} placeholder="Jl. Contoh No. 1, Kota" value={biodataForm.alamat}
-                    onChange={e => setBiodataForm(p => ({ ...p, alamat: e.target.value }))}
-                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 transition resize-none" required />
+                  <label className="block text-xs font-bold text-neutral-600 mb-1">
+                    Alamat Lengkap
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    placeholder="Jl. Contoh No. 1, Kota"
+                    value={biodataForm.alamat}
+                    onChange={(e) =>
+                      setBiodataForm((p) => ({ ...p, alamat: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none"
+                  />
                 </div>
 
-                <h3 className="text-sm font-bold text-neutral-800 border-b border-neutral-100 pb-3 mt-2">Upload Berkas</h3>
+                <h3 className="text-sm font-bold text-neutral-800 border-b border-neutral-100 pb-3 mt-2">
+                  Upload Berkas
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[{ label: "KTP", key: "ktpUrl" }, { label: "KK", key: "kkUrl" }, { label: "Foto Diri", key: "fotoUrl" }].map(f => (
-                    <div key={f.key} className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center gap-2 transition ${biodataFiles[f.key] ? "border-emerald-400 bg-emerald-50/40" : "border-neutral-200 hover:border-emerald-400"}`}>
-                      <Upload className={`h-6 w-6 ${biodataFiles[f.key] ? "text-emerald-600" : "text-neutral-400"}`} />
-                      <label className="text-xs font-bold text-neutral-600 text-center">{f.label}</label>
-                      {biodataFiles[f.key] ? (
-                        <div className="flex flex-col items-center gap-1 w-full">
-                          {biodataFiles[f.key].url && (
-                            <div className="w-full h-24 rounded-lg overflow-hidden border border-emerald-200 cursor-pointer relative group"
-                              onClick={() => setPreviewUrl(biodataFiles[f.key].url)}>
-                              <img src={biodataFiles[f.key].url} alt={f.label} className="w-full h-full object-cover group-hover:scale-105 transition" />
-                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                <Eye className="h-5 w-5 text-white" />
-                              </div>
-                            </div>
-                          )}
-                          <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3" /> {biodataFiles[f.key].name}
+                  {[
+                    { label: "KTP", key: "ktpUrl", status: biodata?.ktpStatus },
+                    { label: "KK", key: "kkUrl", status: biodata?.kkStatus },
+                    {
+                      label: "Foto Diri",
+                      key: "fotoUrl",
+                      status: biodata?.fotoStatus,
+                    },
+                  ].map((f) => {
+                    const fileInfo = biodataFiles[f.key];
+                    const existingUrl =
+                      biodata?.[f.key] && !fileInfo ? biodata[f.key] : null;
+                    const displayUrl =
+                      fileInfo?.localUrl ||
+                      (existingUrl ? API + existingUrl : null);
+                    return (
+                      <div
+                        key={f.key}
+                        className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center gap-2 transition ${
+                          f.status === "DISETUJUI"
+                            ? "border-emerald-400 bg-emerald-50/30"
+                            : f.status === "DITOLAK"
+                              ? "border-red-400 bg-red-50/30"
+                              : displayUrl
+                                ? "border-emerald-300 bg-emerald-50/20"
+                                : "border-neutral-200 hover:border-emerald-400"
+                        }`}
+                      >
+                        <Upload
+                          className={`h-5 w-5 ${displayUrl ? "text-emerald-500" : "text-neutral-400"}`}
+                        />
+                        <p className="text-xs font-bold text-neutral-700">
+                          {f.label}
+                        </p>
+                        {f.status && f.status !== "BELUM" && (
+                          <span
+                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                              f.status === "DISETUJUI"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : f.status === "DITOLAK"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {f.status}
                           </span>
-                          <div className="flex gap-2 w-full">
-                            <button type="button" onClick={() => setPreviewUrl(biodataFiles[f.key].url)}
-                              className="flex-1 text-[10px] text-emerald-700 font-bold border border-emerald-300 rounded-lg py-1 hover:bg-emerald-50 transition flex items-center justify-center gap-1">
-                              <Eye className="h-3 w-3" /> Lihat
-                            </button>
-                            <label className="flex-1 cursor-pointer">
-                              <div className="text-[10px] text-neutral-600 border border-neutral-200 rounded-lg py-1 hover:bg-neutral-100 transition text-center">Ganti</div>
-                              <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden" onChange={e => handleFileChange(e, f.key)} />
-                            </label>
+                        )}
+                        {displayUrl && (
+                          <div
+                            className="w-full h-20 rounded-lg overflow-hidden border border-neutral-200 cursor-pointer"
+                            onClick={() => setPreviewUrl(displayUrl)}
+                          >
+                            <img
+                              src={displayUrl}
+                              alt={f.label}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
-                        </div>
-                      ) : (
+                        )}
                         <label className="w-full cursor-pointer">
-                          <div className="w-full py-1.5 px-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 text-[10px] font-bold rounded-lg text-center transition">Pilih File</div>
-                          <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden" onChange={e => handleFileChange(e, f.key)} />
+                          <div className="w-full py-1.5 px-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 text-[10px] font-bold rounded-lg text-center transition">
+                            {displayUrl ? "Ganti File" : "Pilih File"}
+                          </div>
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            className="hidden"
+                            onChange={(e) => handleFileUpload(e, f.key)}
+                          />
                         </label>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
-                <button type="submit" disabled={biodataSaving}
-                  className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2 disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={biodataSaving}
+                  className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2 disabled:opacity-50"
+                >
                   <CheckCircle className="h-4 w-4" />
-                  {biodataSaving ? "Menyimpan..." : "Simpan Data Diri"}
+                  {biodataSaving
+                    ? "Menyimpan & Mengupload..."
+                    : "Simpan & Ajukan Verifikasi"}
                 </button>
               </form>
             </motion.div>
           )}
 
-          {/* ── KAMAR SAYA ── */}
+          {/* ════ KAMAR SAYA ════ */}
           {userPage === "kamar-saya" && (
-            <motion.div key="kamar-saya" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-col gap-6">
+            <motion.div
+              key="kamar-saya"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col gap-5"
+            >
               <h2 className="text-xl font-bold text-neutral-900">Kamar Saya</h2>
-              <div className="bg-emerald-800 text-white rounded-2xl p-5 flex gap-4 items-center">
-                <div className="p-3 bg-emerald-700 rounded-xl"><Home className="h-8 w-8" /></div>
-                <div><p className="text-[10px] text-emerald-300 font-bold uppercase">Kamar Aktif</p>
-                <h3 className="text-lg font-black">{currentUser.namaKost}</h3></div>
-              </div>
-              <div className="flex gap-1 bg-neutral-100 p-1 rounded-xl">
-                {[
-                  { key: "laporan", label: "Laporan Kerusakan" },
-                  { key: "masa-sewa", label: "Masa Sewa" },
-                  { key: "fasilitas", label: "Fasilitas" },
-                ].map(tab => (
-                  <button key={tab.key} onClick={() => setKamarSayaTab(tab.key)}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${kamarSayaTab === tab.key ? "bg-white text-emerald-800 shadow-sm" : "text-neutral-500"}`}>
-                    {tab.label}
+
+              {!kamarSaya ? (
+                <div className="bg-white border border-neutral-200 rounded-2xl p-12 text-center">
+                  <Home className="h-12 w-12 text-neutral-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-neutral-500">
+                    Anda belum menyewa kamar
+                  </p>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Cari dan ajukan sewa kamar kost untuk memulai.
+                  </p>
+                  <button
+                    onClick={() => setUserPage("beranda")}
+                    className="mt-4 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition"
+                  >
+                    Cari Kost Sekarang
                   </button>
-                ))}
-              </div>
-              {kamarSayaTab === "laporan" && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  <div className="lg:col-span-4 bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-4">
-                    <span className="text-[10px] bg-red-100 text-red-800 font-extrabold px-2.5 py-0.5 rounded-full self-start">BUAT LAPORAN</span>
-                    {notifReport && <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl">{notifReport}</div>}
-                    <form onSubmit={handleAddReport} className="flex flex-col gap-3">
-                      <select required value={newKategori} onChange={e => setNewKategori(e.target.value)}
-                        className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                        <option value="">Kategori...</option>
-                        <option value="pipa">Pipa Air</option><option value="listrik">Listrik</option>
-                        <option value="perabot">Perabot</option><option value="lainnya">Lainnya</option>
-                      </select>
-                      <input type="text" required placeholder="Detail kendala..." value={newKendala}
-                        onChange={e => setNewKendala(e.target.value)}
-                        className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600" />
-                      <textarea rows={2} placeholder="Penjelasan (opsional)..." value={newDetail}
-                        onChange={e => setNewDetail(e.target.value)}
-                        className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none" />
-                      <button type="submit" className="w-full bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs py-2.5 rounded-lg transition flex items-center justify-center gap-1.5">
-                        <Send className="h-3.5 w-3.5" /> Kirim Laporan
-                      </button>
-                    </form>
-                  </div>
-                  <div className="lg:col-span-8">
-                    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-                      <table className="w-full text-left">
-                        <thead><tr className="bg-neutral-50 text-[10px] uppercase text-neutral-500 border-b border-neutral-200">
-                          <th className="p-3">Tgl</th><th className="p-3">Kategori</th><th className="p-3">Kendala</th><th className="p-3">Status</th>
-                        </tr></thead>
-                        <tbody className="text-xs divide-y divide-neutral-100">
-                          {laporanList.length === 0
-                            ? <tr><td colSpan={4} className="p-8 text-center text-neutral-400">Belum ada laporan</td></tr>
-                            : laporanList.map(item => (
-                              <tr key={item.id} className="hover:bg-neutral-50">
-                                <td className="p-3 text-neutral-500">{item.tanggal}</td>
-                                <td className="p-3"><span className="bg-neutral-100 px-2 py-0.5 rounded font-mono text-[10px]">{item.kategori}</span></td>
-                                <td className="p-3 font-bold">{item.kendala}</td>
-                                <td className="p-3">
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${item.status === "SELESAI" ? "bg-emerald-50 text-emerald-700" : item.status === "BARU" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
-                                    {item.status}
-                                  </span>
-                                </td>
-                              </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-emerald-800 text-white rounded-2xl p-5 flex gap-4 items-center">
+                    <div className="p-3 bg-emerald-700 rounded-xl">
+                      <Home className="h-8 w-8" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">
+                        Kamar Aktif
+                      </p>
+                      <h3 className="text-lg font-black">
+                        {kamarSaya.namaKost || "Unit Kamar"}
+                      </h3>
+                      {kamarSaya.batasKontrak && (
+                        <p className="text-xs text-emerald-200 mt-0.5 flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" /> Kontrak s.d.{" "}
+                          {new Date(kamarSaya.batasKontrak).toLocaleDateString(
+                            "id-ID",
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
-              )}
-              {kamarSayaTab === "masa-sewa" && (
-                <div className="bg-white border border-neutral-200 rounded-2xl p-6">
-                  <p className="text-sm font-bold text-neutral-700 mb-4 flex items-center gap-2"><CalendarDays className="h-4 w-4 text-emerald-700" /> Riwayat Pembayaran</p>
-                  <div className="flex flex-col gap-2">
+
+                  <div className="flex gap-1 bg-neutral-100 p-1 rounded-xl">
                     {[
-                      { bulan: "Oktober 2025", jumlah: 1800000, status: "LUNAS" },
-                      { bulan: "November 2025", jumlah: 1800000, status: "LUNAS" },
-                      { bulan: "Februari 2026", jumlah: 1800000, status: "MENUNGGU" },
-                    ].map((item, i) => (
-                      <div key={i} className="flex justify-between items-center py-2.5 px-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                        <p className="text-xs font-bold">{item.bulan}</p>
-                        <div className="flex items-center gap-3">
-                          <p className="text-xs font-bold">Rp {fmt(item.jumlah)}</p>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${item.status === "LUNAS" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{item.status}</span>
+                      { key: "info", label: "Info Kamar" },
+                      { key: "laporan", label: "Laporan Kerusakan" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setKamarTab(tab.key)}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${kamarTab === tab.key ? "bg-white text-emerald-800 shadow-sm" : "text-neutral-500"}`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {kamarTab === "info" && (
+                    <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-3">
+                      <h3 className="text-sm font-bold text-neutral-800">
+                        Detail Sewa
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {[
+                          {
+                            l: "Tipe Sewa",
+                            v:
+                              kamarSaya.tipeSewa === "DUO"
+                                ? "👥 2 Orang"
+                                : "👤 Sendiri",
+                          },
+                          { l: "Durasi", v: `${kamarSaya.durasiBulan} Bulan` },
+                          {
+                            l: "Total",
+                            v: `Rp ${fmt(kamarSaya.totalTagihan)}`,
+                          },
+                          { l: "Nomor Kamar", v: unitSaya?.nomorKamar || "-" },
+                          {
+                            l: "Mulai",
+                            v: kamarSaya.tanggalMulai
+                              ? new Date(
+                                  kamarSaya.tanggalMulai,
+                                ).toLocaleDateString("id-ID")
+                              : "-",
+                          },
+                          {
+                            l: "Kontrak s.d.",
+                            v: kamarSaya.batasKontrak
+                              ? new Date(
+                                  kamarSaya.batasKontrak,
+                                ).toLocaleDateString("id-ID")
+                              : "-",
+                          },
+                        ].map((d) => (
+                          <div
+                            key={d.l}
+                            className="bg-emerald-50 rounded-lg p-2.5 border border-emerald-100"
+                          >
+                            <p className="text-[9px] font-bold text-emerald-600 uppercase">
+                              {d.l}
+                            </p>
+                            <p className="text-xs font-bold text-neutral-800 mt-0.5">
+                              {d.v}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-neutral-400 italic">
+                        Hubungi owner jika ada pertanyaan tentang sewa Anda.
+                      </p>
+                    </div>
+                  )}
+
+                  {kamarTab === "laporan" && (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                      <div className="lg:col-span-4 bg-white border border-neutral-200 rounded-2xl p-5 flex flex-col gap-4">
+                        <span className="text-[10px] bg-red-100 text-red-800 font-extrabold px-2.5 py-0.5 rounded-full self-start uppercase">
+                          Buat Laporan
+                        </span>
+                        {laporanMsg && (
+                          <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl">
+                            {laporanMsg}
+                          </div>
+                        )}
+                        <form
+                          onSubmit={handleLaporan}
+                          className="flex flex-col gap-3"
+                        >
+                          <select
+                            required
+                            value={laporanForm.kategori}
+                            onChange={(e) =>
+                              setLaporanForm((f) => ({
+                                ...f,
+                                kategori: e.target.value,
+                              }))
+                            }
+                            className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          >
+                            <option value="">Kategori...</option>
+                            <option>Pipa Air</option>
+                            <option>Listrik</option>
+                            <option>Perabot</option>
+                            <option>Lainnya</option>
+                          </select>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Detail kendala..."
+                            value={laporanForm.kendala}
+                            onChange={(e) =>
+                              setLaporanForm((f) => ({
+                                ...f,
+                                kendala: e.target.value,
+                              }))
+                            }
+                            className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          />
+                          <textarea
+                            rows={2}
+                            placeholder="Penjelasan (opsional)..."
+                            value={laporanForm.detail}
+                            onChange={(e) =>
+                              setLaporanForm((f) => ({
+                                ...f,
+                                detail: e.target.value,
+                              }))
+                            }
+                            className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none"
+                          />
+                          <button
+                            type="submit"
+                            className="w-full bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs py-2.5 rounded-lg transition flex items-center justify-center gap-1.5"
+                          >
+                            <Send className="h-3.5 w-3.5" /> Kirim Laporan
+                          </button>
+                        </form>
+                      </div>
+                      <div className="lg:col-span-8">
+                        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+                          <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex justify-between">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                              Riwayat Laporan
+                            </h3>
+                            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                              {
+                                laporanList.filter(
+                                  (l) => l.status !== "SELESAI",
+                                ).length
+                              }{" "}
+                              Aktif
+                            </span>
+                          </div>
+                          {laporanList.length === 0 ? (
+                            <div className="p-8 text-center text-neutral-400 text-sm">
+                              Belum ada laporan.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-neutral-100">
+                              {laporanList.map((l) => (
+                                <div
+                                  key={l.id}
+                                  className="p-5 flex flex-col md:flex-row gap-3 items-start md:items-center"
+                                >
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="bg-neutral-100 px-2 py-0.5 rounded font-mono text-[10px] font-bold">
+                                        {l.kategori}
+                                      </span>
+                                      <span className="text-[10px] text-neutral-400">
+                                        {new Date(l.tanggal).toLocaleDateString(
+                                          "id-ID",
+                                        )}
+                                      </span>
+                                    </div>
+                                    <h4 className="text-sm font-bold text-neutral-800">
+                                      {l.kendala}
+                                    </h4>
+                                    <p className="text-xs text-neutral-500 mt-0.5">
+                                      {l.detail}
+                                    </p>
+                                    {l.catatanOwner && (
+                                      <p className="text-[10px] text-emerald-700 mt-1 flex items-center gap-1">
+                                        <Wrench className="h-3 w-3" />{" "}
+                                        {l.catatanOwner}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span
+                                    className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase border ${
+                                      l.status === "SELESAI"
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : l.status === "BARU"
+                                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                                          : l.status === "DITOLAK"
+                                            ? "bg-red-50 text-red-600 border-red-200"
+                                            : "bg-amber-50 text-amber-700 border-amber-200"
+                                    }`}
+                                  >
+                                    {l.status}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {kamarSayaTab === "fasilitas" && (
-                <div className="bg-white border border-neutral-200 rounded-2xl p-6">
-                  <p className="text-sm font-bold text-neutral-800 mb-4">Fasilitas Kamar</p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {[
-                      { nama: "WiFi Cepat", ada: true, icon: "📶" }, { nama: "AC", ada: true, icon: "❄️" },
-                      { nama: "Kamar Mandi Dalam", ada: true, icon: "🚿" }, { nama: "Kasur Springbed", ada: true, icon: "🛏️" },
-                      { nama: "Meja Belajar", ada: true, icon: "📚" }, { nama: "Parkir Motor", ada: true, icon: "🏍️" },
-                    ].map(f => (
-                      <div key={f.nama} className={`flex items-center gap-3 p-3 rounded-xl border ${f.ada ? "bg-emerald-50 border-emerald-200" : "bg-neutral-50 border-neutral-200 opacity-50"}`}>
-                        <span className="text-lg">{f.icon}</span>
-                        <div><p className="text-xs font-bold text-neutral-800">{f.nama}</p>
-                        <p className={`text-[10px] font-bold ${f.ada ? "text-emerald-600" : "text-neutral-400"}`}>{f.ada ? "Tersedia" : "Tidak Ada"}</p></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </motion.div>
           )}
 
-          {/* ── NOTIFIKASI ── */}
+          {/* ════ NOTIFIKASI ════ */}
           {userPage === "notifikasi" && (
-            <motion.div key="notif" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-col gap-6">
-              <div><h2 className="text-xl font-bold text-neutral-900">Notifikasi</h2>
-              <p className="text-xs text-neutral-500 mt-1">Status pengajuan sewa dan undangan patungan.</p></div>
+            <motion.div
+              key="notifikasi"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col gap-5"
+            >
+              <div>
+                <h2 className="text-xl font-bold text-neutral-900">
+                  Notifikasi
+                </h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Undangan & status pengajuan sewa Anda.
+                </p>
+              </div>
 
-              {/* Status Pengajuan Sewa */}
-              {pengajuanSewaList.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Status Pengajuan Sewa</h3>
-                  <div className="flex flex-col gap-3">
-                    {pengajuanSewaList.map(app => (
-                      <div key={app.id} className={`bg-white border rounded-2xl p-5 ${
-                        app.status === "PENDING" || app.status === "MENUNGGU" ? "border-amber-200"
-                        : app.status === "DITERIMA" || app.status === "DISETUJUI" ? "border-emerald-200"
-                        : "border-red-200"}`}>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border mb-2 inline-block ${
-                              (app.status === "PENDING" || app.status === "MENUNGGU") ? "bg-amber-100 text-amber-700 border-amber-200"
-                              : (app.status === "DITERIMA" || app.status === "DISETUJUI") ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-red-100 text-red-700 border-red-200"}`}>
-                              {app.status || "MENUNGGU"}
-                            </span>
-                            <p className="text-xs font-bold text-neutral-800">{app.namaKost || `Kamar #${app.kamarId}`}</p>
-                            <p className="text-xs text-neutral-500 mt-0.5">Durasi: {app.durasiBulan} bulan • Tipe: {app.tipeSewa}</p>
-                          </div>
-                          {(app.status === "PENDING" || app.status === "MENUNGGU") && app.noWaOwner && (
-                            <a href={`https://wa.me/${app.noWaOwner}?text=Halo, saya ${currentUser.name}, ingin menanyakan pengajuan sewa saya.`}
-                              target="_blank" rel="noreferrer"
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-[10px] font-bold hover:bg-green-100 transition">
-                              💬 Hubungi Pemilik
-                            </a>
+              {/* Pengajuan sewa status */}
+              {pengajuanList.length > 0 && (
+                <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+                  <div className="p-4 bg-neutral-50 border-b border-neutral-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                      Status Pengajuan Sewa
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-neutral-100">
+                    {pengajuanList.map((p) => (
+                      <div key={p.id} className="p-5 flex gap-4 items-start">
+                        <span
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                            p.status === "PENDING"
+                              ? "bg-amber-100 text-amber-700 border-amber-200"
+                              : p.status === "DITERIMA"
+                                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                : "bg-red-100 text-red-700 border-red-200"
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-neutral-800">
+                            {p.namaKost || `Pengajuan #${p.id}`}
+                          </p>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            {p.tipeSewa === "DUO" ? "👥 2 Orang" : "👤 Sendiri"}{" "}
+                            • {p.durasiBulan} Bulan • Rp {fmt(p.totalTagihan)}
+                          </p>
+                          {p.status === "PENDING" && p.nomorWhatsApp && (
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  `https://wa.me/${p.nomorWhatsApp}`,
+                                  "_blank",
+                                )
+                              }
+                              className="mt-2 px-3 py-1.5 bg-[#25D366] hover:bg-[#1fad54] text-white text-[10px] font-bold rounded-lg transition"
+                            >
+                              Hubungi Owner
+                            </button>
                           )}
                         </div>
                       </div>
@@ -616,343 +1556,113 @@ export default function UserDashboard({ currentUser, pendingInvites }) {
                 </div>
               )}
 
-              {/* Undangan Patungan */}
-              <div>
-                <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Undangan Patungan (Roommate Invite)</h3>
-                {inviteList.filter(i => i.toUserId === currentUser.id).length === 0 ? (
-                  <div className="bg-white border border-neutral-200 rounded-2xl p-10 text-center">
-                    <BellIcon className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
-                    <p className="text-sm font-bold text-neutral-500">Tidak ada undangan patungan</p>
+              {/* Invite */}
+              {inviteList.filter(
+                (i) => String(i.toUserId) === String(currentUser?.id),
+              ).length > 0 && (
+                <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+                  <div className="p-4 bg-neutral-50 border-b border-neutral-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                      Undangan Roommate
+                    </h3>
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {inviteList.filter(i => i.toUserId === currentUser.id).map(invite => (
-                      <div key={invite.id} className={`bg-white border rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-start md:items-center ${invite.status === "PENDING" ? "border-emerald-300 shadow-sm" : "border-neutral-200"}`}>
-                        <div className="flex-1">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block ${invite.status === "PENDING" ? "bg-blue-100 text-blue-700" : invite.status === "DITERIMA" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                            {invite.status}
-                          </span>
-                          <h4 className="text-sm font-bold text-neutral-800">Undangan dari {invite.fromUserName}</h4>
-                          <p className="text-xs text-neutral-500 mt-0.5">{invite.namaKost} • 2 orang • {invite.durasi} bulan</p>
-                          <p className="text-xs font-bold text-emerald-700 mt-1">Rp {fmt(Math.round(invite.hargaDasar / 2))}/bulan/orang</p>
-                        </div>
-                        {invite.status === "PENDING" && (
-                          <div className="flex gap-2 w-full md:w-auto">
-                            <button onClick={() => handleRespondInvite(invite.id, "DITOLAK")}
-                              className="flex-1 md:flex-none px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-lg transition">Tolak</button>
-                            <button onClick={() => handleRespondInvite(invite.id, "DITERIMA")}
-                              className="flex-1 md:flex-none px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition">Terima</button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── BERANDA ── */}
-          {userPage === "beranda" && (
-            <motion.div key="beranda" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-col gap-6">
-              {!biodata?.isVerified && (
-                <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-center">
-                  <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
-                  <div className="flex-1">
-                    {biodata?.verifikasiStatus === "PENDING"
-                      ? <><p className="text-xs font-bold text-amber-800">⏳ Menunggu verifikasi admin</p><p className="text-xs text-amber-700">Tunggu konfirmasi admin untuk bisa menyewa.</p></>
-                      : <><p className="text-xs font-bold text-amber-800">Data diri belum lengkap</p><p className="text-xs text-amber-700">Lengkapi di menu Data Diri.</p></>
-                    }
-                  </div>
-                  {biodata?.verifikasiStatus !== "PENDING" && (
-                    <button onClick={() => setUserPage("biodata")} className="px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition shrink-0">Lengkapi</button>
-                  )}
-                </div>
-              )}
-              {sewaMsg && (
-                <div className={`p-3 rounded-xl text-xs font-medium border ${sewaMsg.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
-                  {sewaMsg.text}
-                </div>
-              )}
-
-              {selectedKamar ? (
-                <div className="flex flex-col gap-6">
-                  <button onClick={() => { setSelectedKamar(null); setShowInviteForm(false); }}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:text-emerald-950 transition">
-                    <ArrowLeft className="h-4 w-4" /> Kembali ke Daftar Kost
-                  </button>
-
-                  {/* Foto sesuai tipe */}
-                  <div className="rounded-2xl overflow-hidden h-64 relative shadow-sm">
-                    <img src={currentImage || selectedKamar.image} alt={selectedKamar.namaKost}
-                      className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    <div className={`absolute top-4 left-4 font-bold text-xs px-3 py-1 rounded-full shadow ${currentAvailable === 0 ? "bg-neutral-600/90 text-white" : "bg-emerald-900/90 text-white"}`}>
-                      {currentAvailable === 0 ? "Tidak Tersedia" : `${currentAvailable} Kamar Tersedia`}
-                    </div>
-                    <span className="absolute top-4 right-4 bg-white/90 text-neutral-800 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                      {selectedKamar.kategori}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    <div className="lg:col-span-7 flex flex-col gap-4">
-                      <div>
-                        <h2 className="text-2xl font-bold tracking-tight text-neutral-950">{selectedKamar.namaKost}</h2>
-                        <div className="flex items-center gap-2 text-xs text-neutral-500 mt-1">
-                          <MapPin className="h-3.5 w-3.5 text-emerald-700" /> {selectedKamar.daerah}, Medan
-                          <span className="text-neutral-300">•</span>
-                          <span className="text-amber-500 font-bold">★ {selectedKamar.rating}</span>
-                          <span className="text-neutral-300">•</span>
-                          <span className="font-bold text-neutral-600">{selectedKamar.kategori}</span>
-                        </div>
-                      </div>
-                      <hr className="border-neutral-200" />
-                      {/* Deskripsi sesuai tipe */}
-                      <p className="text-xs text-neutral-600 leading-relaxed">{currentDesc}</p>
-                      {/* Fasilitas */}
-                      <div className="flex flex-wrap gap-2">
-                        {selectedKamar.wifiCepat && <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-200">📶 WiFi</span>}
-                        {selectedKamar.ac && <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-blue-200">❄️ AC</span>}
-                        {selectedKamar.kamarMandiDalam && <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-purple-200">🚿 KM Dalam</span>}
-                        {selectedKamar.kasurSpringbed && <span className="bg-orange-50 text-orange-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-orange-200">🛏️ Springbed</span>}
-                        {selectedKamar.mejaBelajar && <span className="bg-neutral-100 text-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-neutral-200">📚 Meja Belajar</span>}
-                        {selectedKamar.dapurBersama && <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-yellow-200">🍳 Dapur</span>}
-                      </div>
-                    </div>
-
-                    <div className="lg:col-span-5">
-                      <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm p-5 flex flex-col gap-4">
-                        <div>
-                          <span className="text-[11px] text-neutral-400 uppercase tracking-widest">Mulai Dari</span>
-                          <div className="flex items-baseline gap-1 mt-0.5">
-                            <h3 className="text-2xl font-black text-emerald-800">Rp {fmt(selectedKamar.hargaDasar)}</h3>
-                            <span className="text-xs text-neutral-500">/ bulan</span>
-                          </div>
-                        </div>
-                        <hr className="border-dashed border-neutral-200" />
-
-                        {/* Opsi sewa */}
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { key: "solo", label: "Sewa Sendiri", sub: `${fmt(selectedKamar.hargaDasar)}/bln`, avail: selectedKamar.availableRoomsSolo },
-                            { key: "patungan", label: "Patungan (2 org)", sub: `${fmt(Math.round(selectedKamar.hargaDasar / 2))}/bln/org`, avail: selectedKamar.availableRoomsPatungan },
-                          ].map(opt => (
-                            <button key={opt.key} onClick={() => setCalcTipe(opt.key)}
-                              className={`py-2.5 px-3 rounded-xl text-xs font-bold border-2 transition-all text-left ${calcTipe === opt.key ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "border-neutral-200 text-neutral-600 hover:border-neutral-300"}`}>
-                              <div className="font-bold">{opt.label}</div>
-                              <div className="text-[10px] font-normal mt-0.5">Rp {opt.sub}</div>
-                              <div className={`text-[9px] font-bold mt-1 ${opt.avail > 0 ? "text-emerald-600" : "text-red-500"}`}>
-                                {opt.avail > 0 ? `${opt.avail} tersedia` : "Tidak tersedia"}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-neutral-500 mb-1">Durasi Sewa</label>
-                          <select value={calcDurasi} onChange={e => setCalcDurasi(Number(e.target.value))}
-                            className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2">
-                            <option value={1}>1 Bulan</option><option value={3}>3 Bulan</option>
-                            <option value={6}>6 Bulan</option><option value={12}>12 Bulan</option>
-                          </select>
-                        </div>
-
-                        {apiResult && (
-                          <div className="bg-emerald-950 text-emerald-100 rounded-xl p-3 text-xs font-mono">
-                            <div className="flex justify-between text-emerald-400 text-[10px] border-b border-emerald-800/40 pb-1.5 mb-1.5">
-                              <span>TOTAL TAGIHAN</span>
-                            </div>
-                            <div className="flex justify-between font-bold">
-                              <span className="text-emerald-300">Total</span>
-                              <span className="text-emerald-300">Rp {fmt(apiResult.totalTagihanHasil)}</span>
-                            </div>
-                            <p className="text-[10px] text-emerald-400 mt-1">{apiResult.formulaPBO}</p>
-                          </div>
-                        )}
-
-                        {/* Tombol Tanya Pemilik */}
-                        {selectedKamar.noWaOwner && (
-                          <a href={`https://wa.me/${selectedKamar.noWaOwner}?text=Halo, saya ${currentUser.name}, ingin menanyakan kost ${selectedKamar.namaKost}.`}
-                            target="_blank" rel="noreferrer"
-                            className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2">
-                            💬 Tanya Pemilik (WhatsApp)
-                          </a>
-                        )}
-
-                        {/* Tombol Ajukan Sewa */}
-                        {currentAvailable === 0 ? (
-                          <div className="w-full py-3 bg-neutral-200 text-neutral-500 font-bold rounded-xl text-sm text-center">Tidak Tersedia</div>
-                        ) : !biodata?.isVerified ? (
-                          <button onClick={() => setUserPage("biodata")}
-                            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2">
-                            <AlertCircle className="h-4 w-4" />
-                            {biodata?.verifikasiStatus === "PENDING" ? "Menunggu Verifikasi Admin" : "Lengkapi Data Diri Dulu"}
-                          </button>
-                        ) : (
-                          <button onClick={() => setShowSewaForm(true)}
-                            className="w-full py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2">
-                            <Home className="h-4 w-4" /> Ajukan Sewa Kamar
-                          </button>
-                        )}
-
-                        {/* Invite roommate (patungan saja) */}
-                        {calcTipe === "patungan" && biodata?.isVerified && currentAvailable > 0 && (
-                          <div className="border-t border-neutral-100 pt-3">
-                            <button onClick={() => setShowInviteForm(f => !f)}
-                              className="w-full py-2 border-2 border-dashed border-emerald-300 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-50 transition flex items-center justify-center gap-2">
-                              <Users className="h-3.5 w-3.5" /> Undang Teman Patungan
-                            </button>
-                            {showInviteForm && (
-                              <form onSubmit={handleSendInvite} className="mt-3 flex flex-col gap-2">
-                                {inviteMsg && <div className={`p-2 rounded-lg text-xs font-medium ${inviteMsg.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{inviteMsg.text}</div>}
-                                <label className="text-[10px] font-bold text-neutral-600">ID Akun Teman</label>
-                                <input type="text" placeholder="Username atau ID teman..." value={inviteTargetId}
-                                  onChange={e => setInviteTargetId(e.target.value)}
-                                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600" required />
-                                <button type="submit"
-                                  className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5">
-                                  <Send className="h-3 w-3" /> Kirim Undangan
+                  <div className="divide-y divide-neutral-100">
+                    {inviteList
+                      .filter(
+                        (i) => String(i.toUserId) === String(currentUser?.id),
+                      )
+                      .map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="p-5 flex gap-4 items-start"
+                        >
+                          <Users className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-neutral-800">
+                              {inv.fromUserName} mengundang Anda
+                            </p>
+                            <p className="text-xs text-neutral-500 mt-0.5">
+                              {inv.namaKost} • {inv.durasi} Bulan • Rp{" "}
+                              {fmt(inv.hargaDasar / 2)}/orang
+                            </p>
+                            {inv.status === "PENDING" && (
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() =>
+                                    handleRespondInvite(inv.id, "DITERIMA")
+                                  }
+                                  className="px-3 py-1.5 bg-emerald-700 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-800 transition"
+                                >
+                                  Terima
                                 </button>
-                              </form>
+                                <button
+                                  onClick={() =>
+                                    handleRespondInvite(inv.id, "DITOLAK")
+                                  }
+                                  className="px-3 py-1.5 bg-neutral-100 text-neutral-700 text-[10px] font-bold rounded-lg hover:bg-neutral-200 transition"
+                                >
+                                  Tolak
+                                </button>
+                              </div>
                             )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Modal konfirmasi sewa */}
-                  {showSewaForm && (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-4">
-                        <h3 className="text-lg font-bold text-neutral-900">Konfirmasi Pengajuan Sewa</h3>
-                        <div className="bg-neutral-50 rounded-xl p-4 flex flex-col gap-2 text-xs">
-                          <div className="flex justify-between"><span className="text-neutral-500">Kost</span><span className="font-bold">{selectedKamar.namaKost}</span></div>
-                          <div className="flex justify-between"><span className="text-neutral-500">Tipe</span><span className="font-bold capitalize">{calcTipe === "solo" ? "Sewa Sendiri" : "Patungan (2 orang)"}</span></div>
-                          <div className="flex justify-between"><span className="text-neutral-500">Durasi</span><span className="font-bold">{calcDurasi} Bulan</span></div>
-                          <div className="flex justify-between border-t border-neutral-200 pt-2 mt-1">
-                            <span className="font-bold text-neutral-700">Total</span>
-                            <span className="font-black text-emerald-800">Rp {fmt(apiResult?.totalTagihanHasil)}</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-neutral-500">Pengajuan akan dikirim ke pemilik kost. Tunggu konfirmasi.</p>
-                        <div className="flex gap-3">
-                          <button onClick={() => setShowSewaForm(false)}
-                            className="flex-1 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-sm rounded-xl transition">Batal</button>
-                          <button onClick={handleSubmitSewa}
-                            className="flex-1 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-sm rounded-xl transition">Kirim Pengajuan</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  {/* Hero */}
-                  <div className="relative rounded-2xl overflow-hidden bg-neutral-900 py-12 px-6 text-center text-white shadow">
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&q=80&w=1200')] bg-cover bg-center opacity-25"></div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-                    <div className="relative z-10 flex flex-col items-center">
-                      <span className="text-[10px] bg-emerald-800 text-emerald-300 px-3 py-1 rounded-full font-bold uppercase tracking-widest mb-3 border border-emerald-700/40">Sewa Patungan Termurah di Medan</span>
-                      <h2 className="text-3xl font-black tracking-tight leading-tight max-w-2xl mb-2">
-                        Cari Kost Nyaman di Medan, <span className="text-emerald-400">Patungan Biar Ringan</span>
-                      </h2>
-                    </div>
-                  </div>
-
-                  {/* Filter */}
-                  <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 mb-1">Daerah</label>
-                      <select value={filterLokasi} onChange={e => setFilterLokasi(e.target.value)}
-                        className="w-full text-xs font-semibold bg-neutral-50 border border-neutral-200 rounded-lg p-2">
-                        <option value="Semua">Semua Daerah</option>
-                        <option value="Padang Bulan">Padang Bulan</option>
-                        <option value="Dr. Mansyur">Dr. Mansyur</option>
-                        <option value="Setia Budi">Setia Budi</option>
-                        <option value="Helvetia">Helvetia</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 mb-1">Kategori</label>
-                      <select value={filterKategori} onChange={e => setFilterKategori(e.target.value)}
-                        className="w-full text-xs font-semibold bg-neutral-50 border border-neutral-200 rounded-lg p-2">
-                        <option value="Semua">Semua</option>
-                        <option value="Putra">Putra</option>
-                        <option value="Putri">Putri</option>
-                        <option value="Campur">Campur</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2 flex items-end">
-                      <button onClick={() => setFilterLokasi("Semua") || setFilterKategori("Semua")}
-                        className="w-full bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-lg hover:bg-emerald-800 transition shadow flex items-center justify-center gap-1.5">
-                        <Search className="h-4 w-4" /> Cari Kost
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Grid kost */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filteredKamar.map(kamar => {
-                      const isFull = kamar.availableRooms === 0;
-                      return (
-                        <div key={kamar.id} onClick={() => !isFull && setSelectedKamar(kamar)}
-                          className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all ${isFull ? "opacity-60 grayscale cursor-not-allowed border-neutral-200" : "border-neutral-200 group cursor-pointer hover:shadow-md hover:border-emerald-700/30"}`}>
-                          <div className="aspect-[4/3] overflow-hidden relative">
-                            <img src={kamar.image} alt={kamar.namaKost} referrerPolicy="no-referrer"
-                              className={`w-full h-full object-cover transition-transform duration-300 ${!isFull && "group-hover:scale-105"}`} />
-                            <span className={`absolute top-3 right-3 text-[10px] font-extrabold px-2 py-0.5 rounded shadow ${isFull ? "bg-neutral-600 text-white" : "bg-white/95 text-neutral-800"}`}>
-                              {isFull ? "Tidak Tersedia" : "Tersedia"}
-                            </span>
-                            <span className="absolute top-3 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-700/90 text-white">
-                              {kamar.kategori}
-                            </span>
-                          </div>
-                          <div className="p-4 flex flex-col gap-2">
-                            <div className="flex justify-between items-start gap-1">
-                              <h4 className={`text-xs font-bold leading-snug truncate max-w-[80%] ${isFull ? "text-neutral-500" : "text-neutral-800 group-hover:text-emerald-800 transition"}`}>
-                                {kamar.namaKost}
-                              </h4>
-                              <span className="text-xs font-extrabold text-amber-500 shrink-0">★ {kamar.rating}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-[11px] text-neutral-500">
-                              <MapPin className="h-3.5 w-3.5" /> {kamar.daerah}
-                            </div>
-                            {!isFull && (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full self-start flex items-center gap-1">
-                                <Users className="h-2.5 w-2.5" /> Bisa Patungan
+                            {inv.status !== "PENDING" && (
+                              <span
+                                className={`inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  inv.status === "DITERIMA"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {inv.status}
                               </span>
                             )}
-                            <div className="border-t border-neutral-100 pt-2 mt-1 flex justify-between items-end">
-                              <div>
-                                <span className="text-[10px] text-neutral-400">Mulai dari</span>
-                                <p className={`text-sm font-black ${isFull ? "text-neutral-400" : "text-emerald-800"}`}>
-                                  Rp {fmt(kamar.hargaDasar)}<span className="text-xs font-normal text-neutral-400">/bln</span>
-                                </p>
-                              </div>
-                              {!isFull && <span className="text-[10px] font-bold text-emerald-700 group-hover:translate-x-1 transition flex items-center gap-0.5">Pilih <ArrowRight className="h-3 w-3" /></span>}
-                            </div>
                           </div>
                         </div>
-                      );
-                    })}
+                      ))}
                   </div>
                 </div>
               )}
+
+              {pengajuanList.length === 0 &&
+                inviteList.filter(
+                  (i) => String(i.toUserId) === String(currentUser?.id),
+                ).length === 0 && (
+                  <div className="bg-white border border-neutral-200 rounded-2xl p-12 text-center">
+                    <BellIcon className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
+                    <p className="text-sm font-bold text-neutral-500">
+                      Tidak ada notifikasi
+                    </p>
+                    <p className="text-xs text-neutral-400 mt-1">
+                      Undangan dan status pengajuan akan muncul di sini.
+                    </p>
+                  </div>
+                )}
             </motion.div>
           )}
-
         </AnimatePresence>
       </main>
 
-      {/* Image Preview Modal */}
+      {/* Image preview modal */}
       {previewUrl && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
-          <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPreviewUrl(null)} className="absolute -top-10 right-0 text-white text-sm font-bold flex items-center gap-1">
-              <X className="h-5 w-5" /> Tutup
+        <div
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="relative max-w-2xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPreviewUrl(null)}
+              className="absolute -top-10 right-0 text-white text-sm font-bold"
+            >
+              ✕ Tutup
             </button>
-            <img src={previewUrl} alt="Preview" className="w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="w-full max-h-[80vh] object-contain rounded-xl shadow-2xl bg-white p-2"
+            />
           </div>
         </div>
       )}

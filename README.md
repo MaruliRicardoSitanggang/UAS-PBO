@@ -15,21 +15,21 @@ Kami akan mendemonstrasikan aplikasi PapiKost. Aplikasi ini adalah platform mana
 
 Sebagai bagian dari penerapan konsep Pemrograman Berorientasi Objek (PBO), sistem kami dibangun dengan fondasi 4 Pilar OOP:
 
-Encapsulation: Menjaga keamanan data pengguna dan entitas kost, di mana field sensitif seperti password dan detail biodata disimpan dengan proteksi akses, serta manipulasi data dilakukan melalui getter/setter yang terdefinisi untuk menjaga integritas objek.
+1. Encapsulation: Menjaga keamanan data pengguna dan entitas kost, di mana field sensitif seperti password dan detail biodata disimpan dengan proteksi akses, serta manipulasi data dilakukan melalui getter/setter yang terdefinisi untuk menjaga integritas objek.
 
-Inheritance: Menerapkan pewarisan dari abstract class Akun ke Penyewa, serta Reservasi ke ReservasiSolo dan ReservasiPatungan, sehingga atribut dan logika dasar dapat diwariskan secara efisien.
+2. Inheritance: Menerapkan pewarisan dari abstract class Akun ke Penyewa, serta Reservasi ke ReservasiSolo dan ReservasiPatungan, sehingga atribut dan logika dasar dapat diwariskan secara efisien.
 
-Polymorphism: Implementasi runtime polymorphism pada metode hitungTotalTagihan() yang mampu menangani objek ReservasiSolo maupun ReservasiPatungan secara dinamis, mengembalikan perhitungan tagihan yang berbeda berdasarkan tipe reservasi tanpa perlu mengetahui tipe pastinya di runtime.
+3. Polymorphism: Implementasi runtime polymorphism pada metode hitungTotalTagihan() yang mampu menangani objek ReservasiSolo maupun ReservasiPatungan secara dinamis, mengembalikan perhitungan tagihan yang berbeda berdasarkan tipe reservasi tanpa perlu mengetahui tipe pastinya di runtime.
 
-Abstraction: Menyembunyikan kerumitan sistem di balik antarmuka yang mudah digunakan, sehingga pengguna cukup mengeklik "Ajukan Sewa" atau "Setujui Pengajuan" tanpa perlu memikirkan proses validasi, penyimpanan ke database, maupun mekanisme CORS di balik layar.
+4. Abstraction: Menyembunyikan kerumitan sistem di balik antarmuka yang mudah digunakan, sehingga pengguna cukup mengeklik "Ajukan Sewa" atau "Setujui Pengajuan" tanpa perlu memikirkan proses validasi, penyimpanan ke database, maupun mekanisme CORS di balik layar.
 
 Komponen & Teknologi yang Dipakai:
 
-Frontend: React.js & Vite & Tailwind CSS
+1. Frontend: React.js & Vite & Tailwind CSS
 
-Backend: Java Spring Boot 3.2.5
+2. Backend: Java Spring Boot 3.2.5
 
-Database: H2 Database (file-based, embedded)
+3. Database: H2 Database (file-based, embedded)
 
 Link GitHub:
 https://github.com/MaruliRicardoSitanggang/UAS-PBO-Backend.git
